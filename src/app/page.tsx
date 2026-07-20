@@ -308,7 +308,7 @@ export default function Home() {
               <div
                         onDragOver={(e) => {
                                     e.preventDefault();
-                                    setfDragging(true);
+                                    setDragging(true);
                         }}
                         onDragLeave={() => setDragging(false)}
                         onDrop={onDrop}
