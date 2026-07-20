@@ -34,7 +34,7 @@ export const FAL_BASE_URL = "https://fal.run";
 //   MAX_EDGE = 2048  -> request the "2K" tier  -> $0.15 / image  (default)
 //   MAX_EDGE = 4096  -> request the "4K" tier  -> $0.30 / image
 // ---------------------------------------------------------------------------
-export const MAX_EDGE = 2048;
+export const MAX_EDGE = 4096;
 
 // JPEG quality used when re-encoding the downscaled image (0-1).
 export const JPEG_QUALITY = 0.9;
