@@ -57,6 +57,11 @@ export default function JobCard({ job, onToggleMode, onRetry }: Props) {
         >
           {STATUS_LABEL[job.status]}
         </span>
+          {job.tab === "enhance" && job.provider ? (
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-600">
+              {job.provider === "openai" ? "ChatGPT" : "Nano Banana"}
+            </span>
+          ) : null}
       </div>
 
       {/* Media area */}
