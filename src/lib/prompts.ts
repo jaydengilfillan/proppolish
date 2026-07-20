@@ -6,6 +6,7 @@
  * misleading listing (removing permanent defects, altering structure, or
  * touching neighbouring property). Edit with care.
  */
+import type { Provider } from "./config";
 
 export type Mode = "interior" | "exterior";
 
@@ -14,11 +15,11 @@ export type Tab = "declutter" | "enhance";
 
 export const INTERIOR_PROMPT = `You are professionally editing a real estate listing photograph to make it clean, tidy and listing-ready.
 
-DO: Remove clutter and the occupant's movable personal belongings — laundry, towels, laundry baskets, dishes and clutter on benchtops/tables/floors, fridge stickers/magnets/notes, personal photos/posters/artwork on walls, stray/random chairs, rubbish bins, cords, toys, pet items. Make beds neat with clean, simple, neutral bedding. Tidy soft furnishings. Correct exposure and white balance, brighten dim/shadowed areas, apply a natural professional real-estate colour grade, and straighten vertical lines. The result must look like a professional agency listing photo.
+DO: Remove clutter and the occupant's movable personal belongings — laundry, towels, laundry baskets, dishes and clutter on benchtops/tables/floors, fridge stickers/magnets/notes, personal photos/posters/artwork on walls, stray/random chairs, rubbish bins, cords, toys, pet items — by masking and removing ONLY those specific clutter regions; everything else in the frame must be left pixel-for-pixel untouched. Make beds neat with clean, simple, neutral bedding. Tidy soft furnishings. Only correct exposure where an area is genuinely too dark or too bright, and straighten vertical lines only if clearly crooked. The result must look like a professional agency listing photo of the SAME room, not a re-coloured or re-toned one.
 
-ABSOLUTELY DO NOT (this is a legal requirement): change, move, add or remove any wall, window, door, ceiling, floor, or built-in fixture; change room dimensions or layout; add rooms, furniture, or features that are not physically present; remove or conceal any permanent defect (cracks, damp, mould, water stains, damage); replace the sky or change the weather/time of day; remove or alter anything outside this property (neighbouring buildings, power lines, fences, structures); never remove window coverings, blinds, curtains or security screens; never reposition or resize built-in appliances. Preserve the property's true architecture and every permanent feature EXACTLY as photographed.
+ABSOLUTELY DO NOT (this is a legal requirement): change, move, add or remove any wall, window, door, ceiling, floor, or built-in fixture; change room dimensions or layout; add rooms, furniture, or features that are not physically present; remove or conceal any permanent defect (cracks, damp, mould, water stains, damage); replace the sky or change the weather/time of day; remove or alter anything outside this property (neighbouring buildings, power lines, fences, structures); never remove window coverings, blinds, curtains or security screens; never reposition or resize built-in appliances. ALSO DO NOT change the colour, hue, saturation or white balance of walls, tiles, benchtops, floors, cabinetry or any other surface — preserve the true, original paint and material colours exactly as photographed; do not introduce any colour cast, tint, wash, or haze over the image. Preserve the property's true architecture and every permanent feature EXACTLY as photographed.
 
-Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss. Subtle and real, not fantasy.`;
+Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss, no colour shift. Subtle and real, not fantasy.`;
 
 export const EXTERIOR_PROMPT = `You are professionally editing an exterior/aerial photograph of a residential property for a real estate listing. Preserve the EXACT camera angle, framing and composition of the original photograph — do not re-compose, re-frame, or change the viewpoint. DO: remove clutter from the yard/driveway/street — cars, boats, trailers, caravans, bins, hoses, rubbish, movable objects; tidy and evenly green/repair a patchy or overgrown lawn; correct exposure, white balance and colour to a natural professional grade. ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky or change weather/time of day; remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only.`;
 
@@ -42,26 +43,42 @@ DO: Fix patchy, dead, brown or overgrown lawn so it looks evenly green, healthy 
 ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky's content or change the weather/time of day (deepening colour is fine, changing conditions is not); remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only.`;
 
 /**
+ * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
+ * Enhance jobs. gpt-image-2 handles fine surface texture work well, so we ask it
+ * to specifically look at hard surfaces (driveways, paths, gutters, downpipes,
+ * concrete, paving) and clean up dirt/staining/blemishes in-place — same
+ * material and colour, just cleaner. This does not apply to the FAL/Nano Banana
+ * provider or to the Declutter tab.
+ */
+export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface textures visible in the frame — driveways, paths, gutters, downpipes, concrete and paving. Where they show dirt, staining, moss, algae, cracks or general blemishes, clean and refresh the texture/finish so it looks well maintained, using the SAME colour, material and style already present (e.g. concrete stays the same grey concrete — do not change it to pavers, a different colour, or a different material). Do not change the shape, layout, size or material type of these surfaces — texture and cleanliness only.`;
+
+/**
  * Build the final prompt for a job.
  *
  * The optional user note is appended AFTER the base prompt so the DO-NOT rules
  * are still in force; the note wording explicitly reminds the model to obey the
- * note while respecting those rules.
+ * note while respecting those rules. The optional provider is used to append
+ * provider-specific instructions (currently: OpenAI exterior texture cleanup).
  */
-export function buildPrompt(tab: Tab, mode: Mode, note?: string): string {
-    const base =
-          tab === "enhance"
-        ? mode === "exterior"
-              ? ENHANCE_EXTERIOR_PROMPT
-              : ENHANCE_INTERIOR_PROMPT
-            : mode === "exterior"
-          ? EXTERIOR_PROMPT
-              : INTERIOR_PROMPT;
-    const trimmed = note?.trim();
-    if (!trimmed) return base;
-    return (
-          base +
-          "\n\nAdditional instruction from the user (obey it, but still respect ALL the DO-NOT rules above): " +
-          trimmed
-        );
+export function buildPrompt(tab: Tab, mode: Mode, note?: string, provider?: Provider): string {
+  let base =
+    tab === "enhance"
+      ? mode === "exterior"
+        ? ENHANCE_EXTERIOR_PROMPT
+        : ENHANCE_INTERIOR_PROMPT
+      : mode === "exterior"
+        ? EXTERIOR_PROMPT
+        : INTERIOR_PROMPT;
+
+  if (tab === "enhance" && mode === "exterior" && provider === "openai") {
+    base = base + "\n\n" + OPENAI_EXTERIOR_TEXTURE_INSTRUCTION;
+  }
+
+  const trimmed = note?.trim();
+  if (!trimmed) return base;
+  return (
+    base +
+    "\n\nAdditional instruction from the user (obey it, but still respect ALL the DO-NOT rules above): " +
+    trimmed
+  );
 }
