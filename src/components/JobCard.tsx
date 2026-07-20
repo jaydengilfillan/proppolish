@@ -8,7 +8,6 @@ import BeforeAfterSlider from "./BeforeAfterSlider";
 
 interface Props {
   job: Job;
-  onToggleMode: (id: string) => void;
   onRetry: (id: string, note: string) => void;
 }
 
@@ -26,7 +25,12 @@ const STATUS_STYLE: Record<Job["status"], string> = {
   error: "bg-red-100 text-red-700",
 };
 
-export default function JobCard({ job, onToggleMode, onRetry }: Props) {
+const MODE_LABEL: Record<Job["mode"], string> = {
+  interior: "Interior",
+  exterior: "Exterior",
+};
+
+export default function JobCard({ job, onRetry }: Props) {
   const [note, setNote] = useState("");
   const [downloading, setDownloading] = useState(false);
 
@@ -52,16 +56,21 @@ export default function JobCard({ job, onToggleMode, onRetry }: Props) {
         <p className="truncate text-sm font-medium" title={job.fileName}>
           {job.fileName}
         </p>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLE[job.status]}`}
-        >
-          {STATUS_LABEL[job.status]}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
+            {MODE_LABEL[job.mode]}
+          </span>
           {job.tab === "enhance" && job.provider ? (
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-600">
               {job.provider === "openai" ? "ChatGPT" : "Nano Banana"}
             </span>
           ) : null}
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLE[job.status]}`}
+          >
+            {STATUS_LABEL[job.status]}
+          </span>
+        </div>
       </div>
 
       {/* Media area */}
@@ -90,18 +99,6 @@ export default function JobCard({ job, onToggleMode, onRetry }: Props) {
           {job.error ?? "Something went wrong."}
         </p>
       )}
-
-      {/* Mode toggle (only meaningful before/at queue time, but always available) */}
-      <label className="flex items-center gap-2 text-xs text-neutral-600">
-        <input
-          type="checkbox"
-          checked={job.mode === "exterior"}
-          disabled={job.status === "processing"}
-          onChange={() => onToggleMode(job.id)}
-          className="h-3.5 w-3.5 rounded border-neutral-300"
-        />
-        Exterior / aerial shot
-      </label>
 
       {/* Actions when done */}
       {job.status === "done" && job.resultUrl && (
