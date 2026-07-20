@@ -4,9 +4,12 @@ import { openaiEdit, OpenAIImageError } from "@/lib/openai";
 import { buildPrompt, Mode, Tab } from "@/lib/prompts";
 import { resolutionTier, Provider } from "@/lib/config";
 
-// This route calls the model provider synchronously and can take 10-20s.
-// Allow generous time.
-export const maxDuration = 60;
+// This route calls the model provider synchronously. FAL is usually fast
+// (10-20s) but OpenAI gpt-image-2 at "high" quality on a full 4K exterior
+// edit can take well over a minute. Vercel (Hobby + Fluid compute) allows up
+// to 300s, so budget close to that rather than the old 60s, which was
+// causing HTTP 504s on slower OpenAI generations.
+export const maxDuration = 280;
 // Always run on the server; never statically optimise.
 export const dynamic = "force-dynamic";
 
