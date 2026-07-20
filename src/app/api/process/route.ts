@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
           note = trimmed || undefined;
     }
 
-  const prompt = buildPrompt(tab, mode, note);
+  const prompt = buildPrompt(tab, mode, note, provider);
 
   try {
         const outputUrl =
