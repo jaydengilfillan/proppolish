@@ -11,7 +11,7 @@ import type { Provider } from "./config";
 export type Mode = "interior" | "exterior";
 
 /** Which top-level feature tab the job was created under. */
-export type Tab = "declutter" | "enhance";
+export type Tab = "declutter" | "enhance" | "restage";
 
 export const INTERIOR_PROMPT = `You are professionally editing a real estate listing photograph to make it clean, tidy and listing-ready.
 
@@ -43,12 +43,39 @@ DO: Fix patchy, dead, brown or overgrown lawn so it looks evenly green, healthy 
 ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky's content or change the weather/time of day (deepening colour is fine, changing conditions is not); remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only.`;
 
 /**
+ * "Restage" tab prompts — Nano Banana (FAL) only, no OpenAI option in the UI.
+ * Removes existing movable furniture/décor and restages using the CURRENT
+ * setup as the reference, swapping each item for a nicer version of the same
+ * type in the same position — not a redesign. Based on a prompt supplied by
+ * the app owner for real listing shoots, generalised to any room/space.
+ */
+export const RESTAGE_INTERIOR_PROMPT = `Use the original room photo as the base. Preserve the EXACT camera angle, perspective, composition, room dimensions, architecture, walls, windows, doors, flooring, ceiling, lighting, and all permanent fixtures.
+
+Remove the existing movable furniture and décor, then restage the room using the current setup as the direct reference for what belongs there. Keep the same furniture layout, positioning, orientation, scale, spacing, and intended function of each area, but replace each item with a more modern, refined, higher-quality version of the same type — for example, an existing sofa becomes a nicer updated sofa in the same position and orientation, a coffee table becomes a more contemporary equivalent, and any dining setting, bed, side table, rug, lamp, artwork or accessory becomes an improved version suited to the room. Only include furniture types that were already represented in the original room.
+
+Maintain a cohesive, neutral, high-end real estate styling with tasteful, minimal décor. The new furniture must fit the room naturally and realistically, at the correct scale, without overcrowding or changing the layout.
+
+ABSOLUTELY DO NOT (this is a legal requirement): relocate furniture to a different wall or area, redesign the room, change room dimensions or layout, alter the architecture, add or remove any wall, window, door, ceiling, floor, or built-in fixture; remove or conceal any permanent defect (cracks, damp, mould, water stains, damage); introduce furniture types, quantities, or features not already represented in the original setup; never remove window coverings, blinds, curtains or security screens; never reposition or resize built-in appliances. Preserve the property's true architecture and every permanent feature EXACTLY as photographed.
+
+Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
+
+export const RESTAGE_EXTERIOR_PROMPT = `Use the original exterior photo as the base. Preserve the EXACT camera angle, perspective, composition, and framing — do not re-compose or change the viewpoint. Preserve the house roof, walls, brickwork, footprint, windows, driveway, fences, landscaping, garden beds, lawn, and every permanent structure exactly as photographed.
+
+Remove the existing movable outdoor furniture and décor (patio sets, outdoor lounges, umbrellas, outdoor rugs, planters, cushions, string lights, BBQs), then restage the outdoor area using the current setup as the direct reference for what belongs there. Keep the same layout, positioning, orientation, scale and intended function of each area, but replace each item with a more modern, refined, higher-quality version of the same type. Only include outdoor furniture types that were already represented in the original setup.
+
+Maintain a cohesive, neutral, high-end real estate styling with tasteful, minimal outdoor décor that fits the space naturally and realistically at the correct scale.
+
+ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, driveway layout, or landscaping; replace the sky or change the weather/time of day; remove, add or alter any neighbouring house, building, road, power line or structure; relocate outdoor furniture to a different area or introduce furniture types not already represented in the original setup. Preserve the true building, landscaping and layout EXACTLY as photographed, from the same viewpoint.
+
+Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
+
+/**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
  * Enhance jobs. gpt-image-2 handles fine surface texture work well, so we ask it
  * to specifically look at hard surfaces (driveways, paths, gutters, downpipes,
  * concrete, paving) and clean up dirt/staining/blemishes in-place — same
  * material and colour, just cleaner. This does not apply to the FAL/Nano Banana
- * provider or to the Declutter tab.
+ * provider, the Declutter tab, or the Restage tab.
  */
 export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface textures visible in the frame — driveways, paths, gutters, downpipes, concrete and paving. Where they show dirt, staining, moss, algae, cracks or general blemishes, clean and refresh the texture/finish so it looks well maintained, using the SAME colour, material and style already present (e.g. concrete stays the same grey concrete — do not change it to pavers, a different colour, or a different material). Do not change the shape, layout, size or material type of these surfaces — texture and cleanliness only.`;
 
@@ -61,14 +88,14 @@ export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface te
  * provider-specific instructions (currently: OpenAI exterior texture cleanup).
  */
 export function buildPrompt(tab: Tab, mode: Mode, note?: string, provider?: Provider): string {
-  let base =
-    tab === "enhance"
-      ? mode === "exterior"
-        ? ENHANCE_EXTERIOR_PROMPT
-        : ENHANCE_INTERIOR_PROMPT
-      : mode === "exterior"
-        ? EXTERIOR_PROMPT
-        : INTERIOR_PROMPT;
+  let base: string;
+  if (tab === "enhance") {
+    base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;
+  } else if (tab === "restage") {
+    base = mode === "exterior" ? RESTAGE_EXTERIOR_PROMPT : RESTAGE_INTERIOR_PROMPT;
+  } else {
+    base = mode === "exterior" ? EXTERIOR_PROMPT : INTERIOR_PROMPT;
+  }
 
   if (tab === "enhance" && mode === "exterior" && provider === "openai") {
     base = base + "\n\n" + OPENAI_EXTERIOR_TEXTURE_INSTRUCTION;
