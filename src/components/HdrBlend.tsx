@@ -2,7 +2,13 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { Tab } from "@/lib/prompts";
-import { blendExposures, HdrBlendError, MIN_BRACKETS, MAX_BRACKETS } from "@/lib/hdrBlend";
+import {
+  blendExposures,
+  HdrBlendError,
+  isRawFile,
+  MIN_BRACKETS,
+  MAX_BRACKETS,
+} from "@/lib/hdrBlend";
 
 interface StagedFile {
   file: File;
@@ -102,7 +108,8 @@ export default function HdrBlend({ onSend }: HdrBlendProps) {
         </span>{" "}
         — this blends them into one balanced photo using real pixel data (no AI
         guessing), which you can then send to Declutter, Enhance, or Restage for
-        finishing.
+        finishing. RAW (.ARW, .DNG) and JPEG brackets are both supported — RAW
+        files are decoded right here in the browser.
       </p>
 
       <div
@@ -116,12 +123,13 @@ export default function HdrBlend({ onSend }: HdrBlendProps) {
       >
         <p className="text-sm font-medium">Choose bracket photos for one room</p>
         <p className="text-xs text-neutral-500">
-          {MIN_BRACKETS}–{MAX_BRACKETS} JPEGs, same framing, different exposures
+          {MIN_BRACKETS}–{MAX_BRACKETS} photos, same framing, different exposures — JPEG,
+          PNG, WEBP, .ARW or .DNG
         </p>
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,.arw,.dng,.cr2,.cr3,.nef,.raf,.rw2,.orf,.pef,.srw"
           multiple
           className="hidden"
           onChange={(e) => {
@@ -135,12 +143,23 @@ export default function HdrBlend({ onSend }: HdrBlendProps) {
         <div className="flex flex-wrap gap-2">
           {staged.map((s, i) => (
             <div key={s.previewUrl} className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={s.previewUrl}
-                alt=""
-                className="h-20 w-20 rounded-lg object-cover"
-              />
+              {isRawFile(s.file) ? (
+                <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-lg border border-neutral-200 bg-neutral-100 px-1 text-center">
+                  <span className="text-[10px] font-semibold uppercase text-neutral-500">
+                    {s.file.name.split(".").pop()}
+                  </span>
+                  <span className="line-clamp-2 text-[9px] leading-tight text-neutral-400">
+                    {s.file.name}
+                  </span>
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={s.previewUrl}
+                  alt=""
+                  className="h-20 w-20 rounded-lg object-cover"
+                />
+              )}
               <button
                 onClick={() => removeStaged(i)}
                 className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-[10px] text-white"
