@@ -2,24 +2,56 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
-import type { Mode } from "@/lib/prompts";
+import type { Mode, Tab, TwilightSky } from "@/lib/prompts";
 import {
   ACCEPTED_TYPES,
   APP_NAME,
   APP_TAGLINE,
   COST_HINT,
+  OPENAI_COST_HINT,
   MAX_EDGE,
 } from "@/lib/config";
+import type { Provider } from "@/lib/config";
 import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
+import HdrBlend from "@/components/HdrBlend";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
 const CONCURRENCY = 3;
 
+const TAB_LABEL: Record<Tab, string> = {
+  declutter: "Declutter",
+  enhance: "Enhance",
+  restage: "Restage",
+  twilight: "Twilight",
+};
+
+const SKY_LABEL: Record<TwilightSky, string> = {
+  orange: "Orange sunset",
+  purple: "Purple twilight",
+};
+
+const MODE_LABEL: Record<Mode, string> = {
+  interior: "Interior",
+  exterior: "Exterior / Aerial",
+};
+
+/**
+ * "process" = the normal Declutter/Enhance/Restage/Twilight upload + job grid.
+ * "hdr" = the bracket-blending panel, which produces one merged photo that
+ * then gets handed off into the "process" flow via HdrBlend's onSend.
+ */
+type View = "process" | "hdr";
+
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [view, setView] = useState<View>("process");
+  const [activeTab, setActiveTab] = useState<Tab>("declutter");
+  const [activeMode, setActiveMode] = useState<Mode>("interior");
+  const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
+  const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
   const [dragging, setDragging] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -34,7 +66,14 @@ export default function Home() {
   }, []);
 
   const processJob = useCallback(
-    async (id: string, note?: string, snapshot?: Pick<Job, "downscaledDataUri" | "mode">) => {
+    async (
+      id: string,
+      note?: string,
+      snapshot?: Pick<
+        Job,
+        "downscaledDataUri" | "mode" | "tab" | "provider" | "sky" | "width" | "height"
+      >
+    ) => {
       // Prefer an explicit snapshot (avoids a race where jobsRef hasn't yet
       // been updated by React's commit); fall back to the live ref for retries.
       const source = snapshot ?? jobsRef.current.find((j) => j.id === id);
@@ -47,6 +86,11 @@ export default function Home() {
           body: JSON.stringify({
             image: source.downscaledDataUri,
             mode: source.mode,
+            tab: source.tab,
+            provider: source.provider,
+            sky: source.sky,
+            width: source.width,
+            height: source.height,
             note,
           }),
         });
@@ -76,6 +120,11 @@ export default function Home() {
           await processJob(job.id, undefined, {
             downscaledDataUri: job.downscaledDataUri,
             mode: job.mode,
+            tab: job.tab,
+            provider: job.provider,
+            sky: job.sky,
+            width: job.width,
+            height: job.height,
           });
         }
       };
@@ -87,7 +136,9 @@ export default function Home() {
   );
 
   const addFiles = useCallback(
-    async (fileList: FileList | File[]) => {
+    async (fileList: FileList | File[], overrideTab?: Tab, overrideMode?: Mode) => {
+      const tab = overrideTab ?? activeTab;
+      const mode = overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
         (ACCEPTED_TYPES as readonly string[]).includes(f.type)
       );
@@ -99,20 +150,28 @@ export default function Home() {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const originalUrl = URL.createObjectURL(file);
         try {
-          const { dataUri } = await downscaleImage(file);
+          const { dataUri, width, height } = await downscaleImage(file);
           newJobs.push({
             id,
             fileName: file.name,
-            mode: "interior",
+            mode,
+            tab,
+            provider: tab === "enhance" ? enhanceProvider : undefined,
+            sky: tab === "twilight" ? twilightSky : undefined,
             status: "queued",
             originalUrl,
             downscaledDataUri: dataUri,
+            width,
+            height,
           });
         } catch (err) {
           newJobs.push({
             id,
             fileName: file.name,
-            mode: "interior",
+            mode,
+            tab,
+            provider: tab === "enhance" ? enhanceProvider : undefined,
+            sky: tab === "twilight" ? twilightSky : undefined,
             status: "error",
             originalUrl,
             downscaledDataUri: "",
@@ -133,7 +192,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky]
   );
 
   const onDrop = useCallback(
@@ -145,16 +204,6 @@ export default function Home() {
     [addFiles]
   );
 
-  const toggleMode = useCallback((id: string) => {
-    setJobs((prev) =>
-      prev.map((j) => {
-        if (j.id !== id) return j;
-        const mode: Mode = j.mode === "interior" ? "exterior" : "interior";
-        return { ...j, mode };
-      })
-    );
-  }, []);
-
   const retry = useCallback(
     (id: string, note: string) => {
       processJob(id, note || undefined);
@@ -163,13 +212,20 @@ export default function Home() {
   );
 
   const clearAll = useCallback(() => {
-    jobsRef.current.forEach((j) => URL.revokeObjectURL(j.originalUrl));
-    setJobs([]);
-  }, []);
+    jobsRef.current
+      .filter((j) => j.tab === activeTab)
+      .forEach((j) => URL.revokeObjectURL(j.originalUrl));
+    setJobs((prev) => prev.filter((j) => j.tab !== activeTab));
+  }, [activeTab]);
+
+  const visibleJobs = useMemo(
+    () => jobs.filter((j) => j.tab === activeTab),
+    [jobs, activeTab]
+  );
 
   const doneJobs = useMemo(
-    () => jobs.filter((j) => j.status === "done" && j.resultUrl),
-    [jobs]
+    () => visibleJobs.filter((j) => j.status === "done" && j.resultUrl),
+    [visibleJobs]
   );
 
   const counts = useMemo(() => {
@@ -179,9 +235,9 @@ export default function Home() {
       done: 0,
       error: 0,
     };
-    for (const j of jobs) c[j.status]++;
+    for (const j of visibleJobs) c[j.status]++;
     return c;
-  }, [jobs]);
+  }, [visibleJobs]);
 
   const downloadAll = useCallback(async () => {
     if (doneJobs.length === 0) return;
@@ -210,6 +266,18 @@ export default function Home() {
     }
   }, [doneJobs]);
 
+  const handleHandoffSend = useCallback(
+    (file: File, tab: Tab) => {
+      setActiveTab(tab);
+      setView("process");
+      addFiles([file], tab);
+    },
+    [addFiles]
+  );
+
+  const costHint =
+    activeTab === "enhance" && enhanceProvider === "openai" ? OPENAI_COST_HINT : COST_HINT;
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       {/* Header */}
@@ -218,99 +286,213 @@ export default function Home() {
         <p className="text-sm text-neutral-500">{APP_TAGLINE}</p>
       </header>
 
-      {/* Dropzone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
-        }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition ${
-          dragging
-            ? "border-neutral-900 bg-neutral-100"
-            : "border-neutral-300 bg-white hover:border-neutral-400"
-        }`}
-      >
-        <p className="text-base font-medium">
-          Drag &amp; drop photos here, or click to choose
-        </p>
-        <p className="text-xs text-neutral-500">
-          JPEG, PNG or WEBP · up to ~30 at a time · {COST_HINT}
-        </p>
-        <p className="text-[11px] text-neutral-400">
-          Resized to {MAX_EDGE}px in your browser before upload. HEIC is not
-          supported in v1.
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_TYPES.join(",")}
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files?.length) addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
+      {/* Tab bar */}
+      <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-neutral-100 p-1 w-fit">
+        {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => {
+              setView("process");
+              setActiveTab(t);
+            }}
+            className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+              view === "process" && activeTab === t
+                ? "bg-white text-neutral-900 shadow-sm"
+                : "text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            {TAB_LABEL[t]}
+          </button>
+        ))}
+        <button
+          onClick={() => setView("hdr")}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            view === "hdr"
+              ? "bg-white text-neutral-900 shadow-sm"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          HDR Blend
+        </button>
       </div>
 
-      {/* Toolbar */}
-      {jobs.length > 0 && (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <span className="text-sm text-neutral-500">
-            {jobs.length} image{jobs.length === 1 ? "" : "s"} ·{" "}
-            {counts.done} done
-            {counts.processing > 0 && ` · ${counts.processing} processing`}
-            {counts.error > 0 && ` · ${counts.error} error`}
-          </span>
-          <div className="ml-auto flex gap-2">
-            <button
-              onClick={downloadAll}
-              disabled={doneJobs.length === 0 || zipping}
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.99] disabled:opacity-40"
-            >
-              {zipping
-                ? "Zipping…"
-                : `Download all (${doneJobs.length})`}
-            </button>
-            <button
-              onClick={clearAll}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium transition hover:bg-neutral-50"
-            >
-              Clear
-            </button>
+      {/* Interior / Exterior selector — applies to every tab except Twilight
+          (which is always a front-of-house/pool hero shot, not a room). Set
+          BEFORE uploading so new jobs are queued with the right prompt from
+          the start (avoids paying twice: once for an auto-processed wrong
+          mode, then again on Retry after switching it). */}
+      {activeTab !== "twilight" && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-xs text-neutral-500">Shot type:</span>
+          <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+            {(Object.keys(MODE_LABEL) as Mode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setActiveMode(m)}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                  activeMode === m
+                    ? "bg-white text-neutral-900 shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                {MODE_LABEL[m]}
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {loadingFiles && (
-        <p className="mt-4 text-sm text-neutral-500">Reading &amp; resizing images…</p>
-      )}
+      {view === "hdr" ? (
+        <HdrBlend onSend={handleHandoffSend} />
+      ) : (
+        <>
+          {/* Enhance tab: model selector */}
+          {activeTab === "enhance" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Model:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                <button
+                  onClick={() => setEnhanceProvider("fal")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    enhanceProvider === "fal"
+                      ? "bg-white text-neutral-900 shadow-sm"
+                      : "text-neutral-500 hover:text-neutral-800"
+                  }`}
+                >
+                  Nano Banana
+                </button>
+                <button
+                  onClick={() => setEnhanceProvider("openai")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    enhanceProvider === "openai"
+                      ? "bg-white text-neutral-900 shadow-sm"
+                      : "text-neutral-500 hover:text-neutral-800"
+                  }`}
+                >
+                  ChatGPT
+                </button>
+              </div>
+            </div>
+          )}
 
-      {/* Grid */}
-      <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {jobs.map((job) => (
-          <JobCard
-            key={job.id}
-            job={job}
-            onToggleMode={toggleMode}
-            onRetry={retry}
-          />
-        ))}
-      </section>
+          {/* Twilight tab: sky reference picker. Default is the orange sunset;
+              this only decides which reference image gets sent alongside the
+              photo — it does not change the prompt itself. */}
+          {activeTab === "twilight" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Sky:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                {(Object.keys(SKY_LABEL) as TwilightSky[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setTwilightSky(s)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      twilightSky === s
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    {SKY_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Dropzone */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+            }}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition ${
+              dragging
+                ? "border-neutral-900 bg-neutral-100"
+                : "border-neutral-300 bg-white hover:border-neutral-400"
+            }`}
+          >
+            <p className="text-base font-medium">
+              Drag &amp; drop photos here, or click to choose
+            </p>
+            <p className="text-xs text-neutral-500">
+              JPEG, PNG or WEBP · up to ~30 at a time · {costHint}
+            </p>
+            <p className="text-[11px] text-neutral-400">
+              Resized to {MAX_EDGE}px in your browser before upload. HEIC is not
+              supported in v1.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_TYPES.join(",")}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </div>
+
+          {/* Toolbar */}
+          {visibleJobs.length > 0 && (
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <span className="text-sm text-neutral-500">
+                {visibleJobs.length} image{visibleJobs.length === 1 ? "" : "s"} ·{" "}
+                {counts.done} done
+                {counts.processing > 0 && ` · ${counts.processing} processing`}
+                {counts.error > 0 && ` · ${counts.error} error`}
+              </span>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={downloadAll}
+                  disabled={doneJobs.length === 0 || zipping}
+                  className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.99] disabled:opacity-40"
+                >
+                  {zipping
+                    ? "Zipping…"
+                    : `Download all (${doneJobs.length})`}
+                </button>
+                <button
+                  onClick={clearAll}
+                  className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium transition hover:bg-neutral-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {loadingFiles && (
+            <p className="mt-4 text-sm text-neutral-500">Reading &amp; resizing images…</p>
+          )}
+
+          {/* Grid */}
+          <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onRetry={retry}
+              />
+            ))}
+          </section>
+        </>
+      )}
 
       {/* Footer note */}
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>
