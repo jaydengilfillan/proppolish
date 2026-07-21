@@ -15,6 +15,7 @@ import type { Provider } from "@/lib/config";
 import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
+import HdrBlend from "@/components/HdrBlend";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -31,8 +32,16 @@ const MODE_LABEL: Record<Mode, string> = {
   exterior: "Exterior / Aerial",
 };
 
+/**
+ * "process" = the normal Declutter/Enhance/Restage upload + job grid.
+ * "hdr" = the bracket-blending panel, which produces one merged photo that
+ * then gets handed off into the "process" flow via HdrBlend's onSend.
+ */
+type View = "process" | "hdr";
+
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [view, setView] = useState<View>("process");
   const [activeTab, setActiveTab] = useState<Tab>("declutter");
   const [activeMode, setActiveMode] = useState<Mode>("interior");
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
@@ -118,7 +127,9 @@ export default function Home() {
   );
 
   const addFiles = useCallback(
-    async (fileList: FileList | File[]) => {
+    async (fileList: FileList | File[], overrideTab?: Tab, overrideMode?: Mode) => {
+      const tab = overrideTab ?? activeTab;
+      const mode = overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
         (ACCEPTED_TYPES as readonly string[]).includes(f.type)
       );
@@ -134,9 +145,9 @@ export default function Home() {
           newJobs.push({
             id,
             fileName: file.name,
-            mode: activeMode,
-            tab: activeTab,
-            provider: activeTab === "enhance" ? enhanceProvider : undefined,
+            mode,
+            tab,
+            provider: tab === "enhance" ? enhanceProvider : undefined,
             status: "queued",
             originalUrl,
             downscaledDataUri: dataUri,
@@ -147,9 +158,9 @@ export default function Home() {
           newJobs.push({
             id,
             fileName: file.name,
-            mode: activeMode,
-            tab: activeTab,
-            provider: activeTab === "enhance" ? enhanceProvider : undefined,
+            mode,
+            tab,
+            provider: tab === "enhance" ? enhanceProvider : undefined,
             status: "error",
             originalUrl,
             downscaledDataUri: "",
@@ -244,6 +255,15 @@ export default function Home() {
     }
   }, [doneJobs]);
 
+  const handleHdrSend = useCallback(
+    (file: File, tab: Tab) => {
+      setActiveTab(tab);
+      setView("process");
+      addFiles([file], tab);
+    },
+    [addFiles]
+  );
+
   const costHint =
     activeTab === "enhance" && enhanceProvider === "openai" ? OPENAI_COST_HINT : COST_HINT;
 
@@ -260,9 +280,12 @@ export default function Home() {
         {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => setActiveTab(t)}
+            onClick={() => {
+              setView("process");
+              setActiveTab(t);
+            }}
             className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
-              activeTab === t
+              view === "process" && activeTab === t
                 ? "bg-white text-neutral-900 shadow-sm"
                 : "text-neutral-500 hover:text-neutral-800"
             }`}
@@ -270,9 +293,19 @@ export default function Home() {
             {TAB_LABEL[t]}
           </button>
         ))}
+        <button
+          onClick={() => setView("hdr")}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            view === "hdr"
+              ? "bg-white text-neutral-900 shadow-sm"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          HDR Blend
+        </button>
       </div>
 
-      {/* Interior / Exterior selector — applies to both tabs. Set BEFORE
+      {/* Interior / Exterior selector — applies everywhere. Set BEFORE
           uploading so new jobs are queued with the right prompt from the
           start (avoids paying twice: once for an auto-processed wrong mode,
           then again on Retry after switching it). */}
@@ -295,127 +328,133 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Enhance tab: model selector */}
-      {activeTab === "enhance" && (
-        <div className="mb-4 flex items-center gap-2">
-          <span className="text-xs text-neutral-500">Model:</span>
-          <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
-            <button
-              onClick={() => setEnhanceProvider("fal")}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                enhanceProvider === "fal"
-                  ? "bg-white text-neutral-900 shadow-sm"
-                  : "text-neutral-500 hover:text-neutral-800"
-              }`}
-            >
-              Nano Banana
-            </button>
-            <button
-              onClick={() => setEnhanceProvider("openai")}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                enhanceProvider === "openai"
-                  ? "bg-white text-neutral-900 shadow-sm"
-                  : "text-neutral-500 hover:text-neutral-800"
-              }`}
-            >
-              ChatGPT
-            </button>
+      {view === "hdr" ? (
+        <HdrBlend onSend={handleHdrSend} />
+      ) : (
+        <>
+          {/* Enhance tab: model selector */}
+          {activeTab === "enhance" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Model:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                <button
+                  onClick={() => setEnhanceProvider("fal")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    enhanceProvider === "fal"
+                      ? "bg-white text-neutral-900 shadow-sm"
+                      : "text-neutral-500 hover:text-neutral-800"
+                  }`}
+                >
+                  Nano Banana
+                </button>
+                <button
+                  onClick={() => setEnhanceProvider("openai")}
+                  className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                    enhanceProvider === "openai"
+                      ? "bg-white text-neutral-900 shadow-sm"
+                      : "text-neutral-500 hover:text-neutral-800"
+                  }`}
+                >
+                  ChatGPT
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Dropzone */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+            }}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition ${
+              dragging
+                ? "border-neutral-900 bg-neutral-100"
+                : "border-neutral-300 bg-white hover:border-neutral-400"
+            }`}
+          >
+            <p className="text-base font-medium">
+              Drag &amp; drop photos here, or click to choose
+            </p>
+            <p className="text-xs text-neutral-500">
+              JPEG, PNG or WEBP · up to ~30 at a time · {costHint}
+            </p>
+            <p className="text-[11px] text-neutral-400">
+              Resized to {MAX_EDGE}px in your browser before upload. HEIC is not
+              supported in v1.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_TYPES.join(",")}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
           </div>
-        </div>
+
+          {/* Toolbar */}
+          {visibleJobs.length > 0 && (
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <span className="text-sm text-neutral-500">
+                {visibleJobs.length} image{visibleJobs.length === 1 ? "" : "s"} ·{" "}
+                {counts.done} done
+                {counts.processing > 0 && ` · ${counts.processing} processing`}
+                {counts.error > 0 && ` · ${counts.error} error`}
+              </span>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={downloadAll}
+                  disabled={doneJobs.length === 0 || zipping}
+                  className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.99] disabled:opacity-40"
+                >
+                  {zipping
+                    ? "Zipping…"
+                    : `Download all (${doneJobs.length})`}
+                </button>
+                <button
+                  onClick={clearAll}
+                  className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium transition hover:bg-neutral-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
+          {loadingFiles && (
+            <p className="mt-4 text-sm text-neutral-500">Reading &amp; resizing images…</p>
+          )}
+
+          {/* Grid */}
+          <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                onRetry={retry}
+              />
+            ))}
+          </section>
+        </>
       )}
-
-      {/* Dropzone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
-        }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition ${
-          dragging
-            ? "border-neutral-900 bg-neutral-100"
-            : "border-neutral-300 bg-white hover:border-neutral-400"
-        }`}
-      >
-        <p className="text-base font-medium">
-          Drag &amp; drop photos here, or click to choose
-        </p>
-        <p className="text-xs text-neutral-500">
-          JPEG, PNG or WEBP · up to ~30 at a time · {costHint}
-        </p>
-        <p className="text-[11px] text-neutral-400">
-          Resized to {MAX_EDGE}px in your browser before upload. HEIC is not
-          supported in v1.
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED_TYPES.join(",")}
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files?.length) addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-      </div>
-
-      {/* Toolbar */}
-      {visibleJobs.length > 0 && (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <span className="text-sm text-neutral-500">
-            {visibleJobs.length} image{visibleJobs.length === 1 ? "" : "s"} ·{" "}
-            {counts.done} done
-            {counts.processing > 0 && ` · ${counts.processing} processing`}
-            {counts.error > 0 && ` · ${counts.error} error`}
-          </span>
-          <div className="ml-auto flex gap-2">
-            <button
-              onClick={downloadAll}
-              disabled={doneJobs.length === 0 || zipping}
-              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition active:scale-[0.99] disabled:opacity-40"
-            >
-              {zipping
-                ? "Zipping…"
-                : `Download all (${doneJobs.length})`}
-            </button>
-            <button
-              onClick={clearAll}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium transition hover:bg-neutral-50"
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      )}
-
-      {loadingFiles && (
-        <p className="mt-4 text-sm text-neutral-500">Reading &amp; resizing images…</p>
-      )}
-
-      {/* Grid */}
-      <section className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {visibleJobs.map((job) => (
-          <JobCard
-            key={job.id}
-            job={job}
-            onRetry={retry}
-          />
-        ))}
-      </section>
 
       {/* Footer note */}
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>
