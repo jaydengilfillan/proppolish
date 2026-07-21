@@ -26,7 +26,7 @@
  *     linear algebra, which is why it can run instantly on-device.
  *  4. Recolour: blend a blue-sky gradient into the image using that alpha
  *     matte, modulated by the original luminance so cloud/haze texture and the
- *     silhouettes of branches are preserved rather than flattening to one color.
+ *     silhouettes of branches are preserved rather than flattened to one color.
  *  5. Hard-clamp alpha to zero outside the user's ROI rectangle. The guided
  *     filter's own feathering is only trusted a few pixels past a real edge —
  *     it must never bleed onto a wall or ceiling the user didn't select.
@@ -157,15 +157,26 @@ function guidedFilter(
 /**
  * Build the rough trimap: 1 = definite sky, 0 = definite non-sky, 0.5 = unknown
  * (left for the guided filter to resolve using real edge structure).
+ *
+ * `seedMask` is a separate binary (0/1) map of ONLY the definite-sky pixels.
+ * It exists because the guided filter's linear regression can still paint
+ * alpha onto "unknown" (0.5) pixels that sit in a smooth, low-contrast area
+ * with no real edge to snap to — e.g. a warm ceiling that gradually darkens
+ * into a window's top trim. Colour-thresholding correctly refuses to seed
+ * those pixels as sky, but without a hard distance limit the filter can still
+ * extrapolate confidently across that gradual, edge-less transition. The
+ * seed mask lets the caller cap how far alpha is allowed to travel from an
+ * actual confirmed sky pixel, independent of local contrast.
  */
 function buildTrimap(
   rgba: Uint8ClampedArray,
   width: number,
   height: number,
   roi: { x0: number; x1: number; y0: number; y1: number }
-): Float32Array {
+): { trimap: Float32Array; seedMask: Float32Array } {
   const size = width * height;
   const trimap = new Float32Array(size).fill(0); // outside ROI is always definite non-sky
+  const seedMask = new Float32Array(size).fill(0);
   for (let y = roi.y0; y < roi.y1; y++) {
     for (let x = roi.x0; x < roi.x1; x++) {
       const idx = y * width + x;
@@ -174,9 +185,23 @@ function buildTrimap(
       const definiteSky = v > 150 && s < 0.14;
       const definiteFoliage = h > 35 && h < 95 && s > 0.24;
       trimap[idx] = definiteSky ? 1 : definiteFoliage ? 0 : 0.5;
+      if (definiteSky) seedMask[idx] = 1;
     }
   }
-  return trimap;
+  return { trimap, seedMask };
+}
+
+/**
+ * Turn a binary seed mask into a "within reach" mask: 1 for any pixel that
+ * has at least one seed pixel within `radius`, 0 otherwise. Implemented as a
+ * box-filtered average thresholded at >0 (cheap dilation via the same
+ * summed-area-table box filter used elsewhere in this file).
+ */
+function dilateMask(mask: Float32Array, width: number, height: number, radius: number): Float32Array {
+  const avg = boxFilter(mask, width, height, radius);
+  const out = new Float32Array(width * height);
+  for (let i = 0; i < out.length; i++) out[i] = avg[i] > 1e-6 ? 1 : 0;
+  return out;
 }
 
 /**
@@ -201,8 +226,18 @@ export function applySkyFix(
     guide[i] = (0.299 * src[p] + 0.587 * src[p + 1] + 0.114 * src[p + 2]) / 255;
   }
 
-  const trimap = buildTrimap(src, width, height, roi);
+  const { trimap, seedMask } = buildTrimap(src, width, height, roi);
   let alpha = guidedFilter(guide, trimap, width, height, opts.guidedFilterRadius, opts.guidedFilterEps);
+
+  // Cap how far alpha may travel from an actual confirmed sky pixel. Without
+  // this, a smooth/low-contrast transition (e.g. a warm ceiling fading into a
+  // window's top trim) gives the guided filter no real edge to snap to, and
+  // its linear regression can extrapolate confident-looking alpha straight
+  // through it onto the ceiling — even though colour-thresholding correctly
+  // refused to seed those pixels as sky in the first place.
+  const reachRadius = Math.max(12, Math.round(opts.guidedFilterRadius * 3));
+  const reachMask = dilateMask(seedMask, width, height, reachRadius);
+  for (let i = 0; i < alpha.length; i++) alpha[i] *= reachMask[i];
 
   // Hard-clamp: never let the filter's own feathering bleed past the user's
   // rectangle onto a wall/ceiling they didn't select.
