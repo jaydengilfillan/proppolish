@@ -16,9 +16,16 @@
  * Everything runs in the browser via <canvas>, matching the rest of this
  * app's "resize/process before upload" pattern in `./image.ts` — no server
  * round trip, no per-image vendor cost.
+ *
+ * RAW files (.ARW, .DNG, and other camera/drone RAW formats) are decoded
+ * client-side via libraw-wasm (a WebAssembly build of LibRaw) before being
+ * fed into the same fusion pipeline as JPEG/PNG/WEBP brackets. Browsers
+ * can't decode RAW natively, so this is the only way to support drone DNGs
+ * and Sony ARWs without a server round trip.
  */
 
 import { fitWithin } from "./image";
+import LibRaw from "libraw-wasm";
 
 /** Cap the working resolution for the blend so it stays fast in-browser. */
 const BLEND_MAX_EDGE = 2400;
@@ -26,7 +33,15 @@ const BLEND_MAX_EDGE = 2400;
 export const MIN_BRACKETS = 2;
 export const MAX_BRACKETS = 9;
 
+/** Extensions routed to the RAW decoder instead of the browser's native <img> decode. */
+const RAW_EXTENSIONS = /\.(arw|dng|cr2|cr3|nef|raf|rw2|orf|pef|srw)$/i;
+
 export class HdrBlendError extends Error {}
+
+/** True for RAW formats (.ARW, .DNG, etc.) that browsers can't natively preview or decode. */
+export function isRawFile(file: File): boolean {
+  return RAW_EXTENSIONS.test(file.name);
+}
 
 /**
  * Blend a bracket set into one exposure-fused JPEG Blob.
@@ -47,16 +62,22 @@ export async function blendExposures(
     );
   }
 
-  await report(onProgress, "Reading photos…");
-  const images = await Promise.all(files.map(loadImageEl));
-  const { width, height } = fitWithin(
-    images[0].naturalWidth,
-    images[0].naturalHeight,
-    BLEND_MAX_EDGE
-  );
+  const sources: DecodedSource[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    await report(
+      onProgress,
+      isRawFile(file)
+        ? `Decoding RAW file ${i + 1}/${files.length} (${file.name})…`
+        : `Reading photo ${i + 1}/${files.length}…`
+    );
+    sources.push(await loadSource(file));
+  }
 
-  const layers = images.map((img) => drawToFloatRGB(img, width, height));
-  images.forEach((img) => URL.revokeObjectURL(img.src));
+  const { width, height } = fitWithin(sources[0].width, sources[0].height, BLEND_MAX_EDGE);
+
+  const layers = sources.map((s) => drawToFloatRGB(s.source, width, height));
+  sources.forEach((s) => s.revoke?.());
 
   await report(onProgress, "Computing exposure weights…");
   const weights = layers.map((l) => computeWeightMap(l, width, height));
@@ -78,6 +99,90 @@ async function report(fn: ((m: string) => void) | undefined, msg: string) {
 
 // --- Image IO ---------------------------------------------------------------
 
+interface DecodedSource {
+  /** Anything <canvas> can draw from — an <img> for JPEG/PNG/WEBP, or an
+   *  offscreen canvas already populated with a RAW decode. */
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  /** Cleanup for the object URL backing an <img> source, if any. */
+  revoke?: () => void;
+}
+
+async function loadSource(file: File): Promise<DecodedSource> {
+  if (isRawFile(file)) {
+    const canvas = await decodeRawToCanvas(file);
+    return { source: canvas, width: canvas.width, height: canvas.height };
+  }
+  const img = await loadImageEl(file);
+  return {
+    source: img,
+    width: img.naturalWidth,
+    height: img.naturalHeight,
+    revoke: () => URL.revokeObjectURL(img.src),
+  };
+}
+
+/**
+ * Decode a RAW file (.ARW, .DNG, etc.) via libraw-wasm into an offscreen
+ * canvas at native resolution. `halfSize` is used because we downscale to
+ * BLEND_MAX_EDGE immediately afterward anyway — half-size output from any
+ * real camera or drone sensor still comfortably clears that cap, and it
+ * roughly quarters the demosaic work.
+ *
+ * Two settings matter more than they might look:
+ * - `useCameraWb: true` (not auto white balance) keeps every bracket in the
+ *   set using the SAME white balance — auto-WB decided independently per
+ *   RAW file would reintroduce exactly the colour-inconsistency-across-
+ *   brackets problem this feature exists to avoid.
+ * - `noAutoBright: true` disables LibRaw's automatic exposure normalization.
+ *   Without it, LibRaw would flatten each bracket toward a similar brightness
+ *   on decode, destroying the actual exposure differences the fusion
+ *   algorithm needs to tell which frame is well-exposed where.
+ */
+async function decodeRawToCanvas(file: File): Promise<HTMLCanvasElement> {
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  const raw = new LibRaw();
+  try {
+    await raw.open(buffer, {
+      halfSize: true,
+      outputBps: 8,
+      outputColor: 1, // sRGB
+      useCameraWb: true,
+      userFlip: -1, // respect the file's own orientation
+      noAutoBright: true,
+    });
+    const result = await raw.imageData();
+    if (!result || !result.data || !result.width || !result.height) {
+      throw new HdrBlendError(
+        `Could not decode ${file.name}. The RAW file may be corrupt or from an unsupported camera.`
+      );
+    }
+    const { width, height, colors, data } = result;
+    const channels = colors || 3;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new HdrBlendError("Could not get a 2D canvas context in this browser.");
+    const imgData = ctx.createImageData(width, height);
+    for (let p = 0, s = 0, d = 0; p < width * height; p++, s += channels, d += 4) {
+      imgData.data[d] = data[s];
+      imgData.data[d + 1] = data[s + 1];
+      imgData.data[d + 2] = data[s + 2];
+      imgData.data[d + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return canvas;
+  } catch (err) {
+    if (err instanceof HdrBlendError) throw err;
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new HdrBlendError(`Could not decode ${file.name} (${detail}).`);
+  } finally {
+    raw.dispose();
+  }
+}
+
 function loadImageEl(file: File): Promise<HTMLImageElement> {
   const objectUrl = URL.createObjectURL(file);
   return new Promise((resolve, reject) => {
@@ -92,7 +197,7 @@ function loadImageEl(file: File): Promise<HTMLImageElement> {
 }
 
 /** Draw an image at a fixed size and return interleaved RGB floats in [0,1] (alpha dropped). */
-function drawToFloatRGB(img: HTMLImageElement, width: number, height: number): Float32Array {
+function drawToFloatRGB(img: CanvasImageSource, width: number, height: number): Float32Array {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
