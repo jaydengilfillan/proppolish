@@ -17,7 +17,7 @@ interface ProcessBody {
     image?: unknown; // data URI of the downscaled image
   mode?: unknown; // "interior" | "exterior"
   note?: unknown; // optional user instruction
-  tab?: unknown; // "declutter" | "enhance"
+  tab?: unknown; // "declutter" | "enhance" | "restage"
   provider?: unknown; // "fal" | "openai" (only meaningful when tab === "enhance")
   width?: unknown; // original (pre-downscale) width, used by the OpenAI provider
   height?: unknown; // original (pre-downscale) height, used by the OpenAI provider
@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
               );
   }
     const mode: Mode = body.mode === "exterior" ? "exterior" : "interior";
-    const tab: Tab = body.tab === "enhance" ? "enhance" : "declutter";
+    const tab: Tab =
+        body.tab === "enhance" ? "enhance" : body.tab === "restage" ? "restage" : "declutter";
     const provider: Provider = body.provider === "openai" ? "openai" : "fal";
     const width = typeof body.width === "number" ? body.width : undefined;
     const height = typeof body.height === "number" ? body.height : undefined;
