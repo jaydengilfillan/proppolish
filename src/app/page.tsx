@@ -23,6 +23,7 @@ const CONCURRENCY = 3;
 const TAB_LABEL: Record<Tab, string> = {
   declutter: "Declutter",
   enhance: "Enhance",
+  restage: "Restage",
 };
 
 const MODE_LABEL: Record<Mode, string> = {
@@ -414,7 +415,7 @@ export default function Home() {
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>
