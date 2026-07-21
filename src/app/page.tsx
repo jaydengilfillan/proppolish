@@ -16,6 +16,7 @@ import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
 import HdrBlend from "@/components/HdrBlend";
+import SkyFix from "@/components/SkyFix";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -36,8 +37,13 @@ const MODE_LABEL: Record<Mode, string> = {
  * "process" = the normal Declutter/Enhance/Restage upload + job grid.
  * "hdr" = the bracket-blending panel, which produces one merged photo that
  * then gets handed off into the "process" flow via HdrBlend's onSend.
+ * "skyfix" = the deliberate, user-directed sky recolour tool. Kept separate
+ * from Declutter/Enhance on purpose — those two refuse to touch the sky at
+ * all (see prompts.ts), since silently changing weather/conditions is a real
+ * listing-accuracy problem. Sky Fix exists so a user can still choose to do
+ * it, explicitly, photo by photo.
  */
-type View = "process" | "hdr";
+type View = "process" | "hdr" | "skyfix";
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -255,7 +261,7 @@ export default function Home() {
     }
   }, [doneJobs]);
 
-  const handleHdrSend = useCallback(
+  const handleHandoffSend = useCallback(
     (file: File, tab: Tab) => {
       setActiveTab(tab);
       setView("process");
@@ -276,7 +282,7 @@ export default function Home() {
       </header>
 
       {/* Tab bar */}
-      <div className="mb-4 flex gap-1 rounded-lg bg-neutral-100 p-1 w-fit">
+      <div className="mb-4 flex flex-wrap gap-1 rounded-lg bg-neutral-100 p-1 w-fit">
         {(Object.keys(TAB_LABEL) as Tab[]).map((t) => (
           <button
             key={t}
@@ -302,6 +308,16 @@ export default function Home() {
           }`}
         >
           HDR Blend
+        </button>
+        <button
+          onClick={() => setView("skyfix")}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            view === "skyfix"
+              ? "bg-white text-neutral-900 shadow-sm"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          Sky Fix
         </button>
       </div>
 
@@ -329,7 +345,9 @@ export default function Home() {
       </div>
 
       {view === "hdr" ? (
-        <HdrBlend onSend={handleHdrSend} />
+        <HdrBlend onSend={handleHandoffSend} />
+      ) : view === "skyfix" ? (
+        <SkyFix onSend={handleHandoffSend} />
       ) : (
         <>
           {/* Enhance tab: model selector */}
@@ -454,7 +472,7 @@ export default function Home() {
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Sky Fix is a separate, deliberate tool for recolouring an overcast sky — Declutter and Enhance never touch the sky on their own. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>
