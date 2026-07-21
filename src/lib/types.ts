@@ -1,4 +1,4 @@
-import type { Mode, Tab } from "./prompts";
+import type { Mode, Tab, TwilightSky } from "./prompts";
 import type { Provider } from "./config";
 
 export type JobStatus = "queued" | "processing" | "done" | "error";
@@ -11,6 +11,8 @@ export interface Job {
   tab: Tab;
     /** Which model to use — only meaningful when tab === "enhance". */
   provider?: Provider;
+    /** Which sky reference to composite against — only meaningful when tab === "twilight". */
+  sky?: TwilightSky;
     status: JobStatus;
     /** Object URL of the ORIGINAL upload — used for the "before" view + download-original. */
   originalUrl: string;

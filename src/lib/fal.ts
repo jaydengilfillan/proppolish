@@ -16,8 +16,13 @@ export class FalError extends Error {
 
 export interface FalEditParams {
   prompt: string;
-  /** Downscaled source image as a data URI (data:image/jpeg;base64,...). */
-  imageDataUri: string;
+  /**
+   * Input images, in order, as data URIs or absolute URLs. Element 0 is the
+   * photo being edited. Twilight jobs append a second element: the absolute
+   * URL of the sky reference image the user picked. Every other tab passes
+   * exactly one element.
+   */
+  imageUrls: string[];
   /** FAL resolution tier — "2K" or "4K". */
   resolution: "2K" | "4K";
   /** Optional override of the model id. Defaults to config FAL_MODEL. */
@@ -30,7 +35,7 @@ export interface FalEditParams {
  * Request shape (verified against the model schema + reference client):
  *   POST https://fal.run/{model}
  *   Authorization: Key ${FAL_KEY}
- *   { prompt, image_urls: [<data uri>], resolution, num_images: 1 }
+ *   { prompt, image_urls: [<data uri>, ...], resolution, num_images: 1 }
  * The output image URL lives at response.images[0].url.
  */
 export async function falEdit(params: FalEditParams): Promise<string> {
@@ -47,7 +52,7 @@ export async function falEdit(params: FalEditParams): Promise<string> {
 
   const body = {
     prompt: params.prompt,
-    image_urls: [params.imageDataUri],
+    image_urls: params.imageUrls,
     resolution: params.resolution,
     num_images: 1,
   };

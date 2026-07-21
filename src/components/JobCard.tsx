@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Job } from "@/lib/types";
+import type { TwilightSky } from "@/lib/prompts";
 import { COST_HINT } from "@/lib/config";
 import { triggerDownload, urlToBlob } from "@/lib/image";
 import BeforeAfterSlider from "./BeforeAfterSlider";
@@ -28,6 +29,11 @@ const STATUS_STYLE: Record<Job["status"], string> = {
 const MODE_LABEL: Record<Job["mode"], string> = {
   interior: "Interior",
   exterior: "Exterior",
+};
+
+const SKY_LABEL: Record<TwilightSky, string> = {
+  orange: "Orange sunset",
+  purple: "Purple twilight",
 };
 
 export default function JobCard({ job, onRetry }: Props) {
@@ -57,9 +63,15 @@ export default function JobCard({ job, onRetry }: Props) {
           {job.fileName}
         </p>
         <div className="flex shrink-0 items-center gap-1">
-          <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
-            {MODE_LABEL[job.mode]}
-          </span>
+          {job.tab === "twilight" ? (
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
+              {SKY_LABEL[job.sky ?? "orange"]}
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
+              {MODE_LABEL[job.mode]}
+            </span>
+          )}
           {job.tab === "enhance" && job.provider ? (
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-600">
               {job.provider === "openai" ? "ChatGPT" : "Nano Banana"}

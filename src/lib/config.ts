@@ -3,6 +3,7 @@
  *
  * Everything a re-brander or cost-tuner would want to change lives here.
  */
+import type { TwilightSky } from "./prompts";
 
 // ---------------------------------------------------------------------------
 // Branding — change this one constant to rebrand the whole app.
@@ -75,6 +76,18 @@ export const COST_HINT = `~$${costPerImage().toFixed(2)}/generation`;
  * approximate range rather than an exact figure.
  */
 export const OPENAI_COST_HINT = "~$0.10–$0.30/generation (OpenAI, varies by image)";
+
+// ---------------------------------------------------------------------------
+// Twilight tab — sky reference images.
+//
+// These live as static files in /public/skies/ so the server can turn them
+// into an absolute URL (FAL fetches images by URL, not by relative path).
+// The default is "orange"; the UI's "Change sky to purple" toggle switches it.
+// ---------------------------------------------------------------------------
+export const TWILIGHT_SKIES: Record<TwilightSky, string> = {
+  orange: "/skies/sunset-orange.jpg",
+  purple: "/skies/twilight-purple.jpg",
+};
 
 // Accepted upload types. HEIC is intentionally unsupported in v1 (browsers can't
 // decode it to a canvas reliably) — surfaced to the user on the upload page.

@@ -11,7 +11,10 @@ import type { Provider } from "./config";
 export type Mode = "interior" | "exterior";
 
 /** Which top-level feature tab the job was created under. */
-export type Tab = "declutter" | "enhance" | "restage";
+export type Tab = "declutter" | "enhance" | "restage" | "twilight";
+
+/** Which sky reference image Twilight jobs should be composited against. */
+export type TwilightSky = "orange" | "purple";
 
 export const INTERIOR_PROMPT = `You are professionally editing a real estate listing photograph to make it clean, tidy and listing-ready.
 
@@ -70,6 +73,21 @@ ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions
 Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
 
 /**
+ * "Twilight" tab prompt — Nano Banana (FAL) only, multi-image edit. Converts a
+ * daytime front-of-house or pool/back-entertaining hero shot into a dusk shot.
+ * A second image (the sky reference the user picked) is sent alongside the
+ * photo; this prompt tells the model how to use it. Same hard DO-NOT pattern
+ * as the rest of this file — no new fixtures, nothing moved, camera locked.
+ */
+export const TWILIGHT_PROMPT = `You are professionally converting a daytime real estate photograph (front-of-house or pool/back-entertaining hero shot) into a realistic night twilight scene. A second reference image is provided showing the exact sky — colour, gradient and cloud pattern — to use.
+
+DO: Transform this daytime shot into a realistic night twilight scene. Set the sky to the sky shown in the second reference image. Turn on all visible exterior lighting that is physically already fitted to the building — window lights, downlights, wall sconces, path/step lights, eave lights — so it reads as switched on at dusk, but do not add any lighting that isn't already there. Keep the house, landscaping, and camera angle exactly the same. Maintain a natural, balanced lighting between the sky and the lit building. If a pool is visible, illuminate the pool water a natural light blue. Cinematic, high-end real estate twilight look — photorealistic, no stylisation.
+
+ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight, string light or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture, landscaping, vehicle, person or object; change the camera angle, framing, composition, zoom or perspective; change the building's structure, walls, windows, doors, roofline, or any permanent feature; alter neighbouring buildings, fences, power lines or structures. Preserve the property's true architecture, layout and every permanent feature EXACTLY as photographed — only the sky and the ambient/exterior lighting may change.
+
+Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss.`;
+
+/**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
  * Enhance jobs. gpt-image-2 handles fine surface texture work well, so we ask it
  * to specifically look at hard surfaces (driveways, paths, gutters, downpipes,
@@ -89,7 +107,9 @@ export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface te
  */
 export function buildPrompt(tab: Tab, mode: Mode, note?: string, provider?: Provider): string {
   let base: string;
-  if (tab === "enhance") {
+  if (tab === "twilight") {
+    base = TWILIGHT_PROMPT;
+  } else if (tab === "enhance") {
     base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;
   } else if (tab === "restage") {
     base = mode === "exterior" ? RESTAGE_EXTERIOR_PROMPT : RESTAGE_INTERIOR_PROMPT;

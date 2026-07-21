@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
-import type { Mode, Tab } from "@/lib/prompts";
+import type { Mode, Tab, TwilightSky } from "@/lib/prompts";
 import {
   ACCEPTED_TYPES,
   APP_NAME,
@@ -16,7 +16,6 @@ import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
 import HdrBlend from "@/components/HdrBlend";
-import SkyFix from "@/components/SkyFix";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -26,6 +25,12 @@ const TAB_LABEL: Record<Tab, string> = {
   declutter: "Declutter",
   enhance: "Enhance",
   restage: "Restage",
+  twilight: "Twilight",
+};
+
+const SKY_LABEL: Record<TwilightSky, string> = {
+  orange: "Orange sunset",
+  purple: "Purple twilight",
 };
 
 const MODE_LABEL: Record<Mode, string> = {
@@ -34,16 +39,11 @@ const MODE_LABEL: Record<Mode, string> = {
 };
 
 /**
- * "process" = the normal Declutter/Enhance/Restage upload + job grid.
+ * "process" = the normal Declutter/Enhance/Restage/Twilight upload + job grid.
  * "hdr" = the bracket-blending panel, which produces one merged photo that
  * then gets handed off into the "process" flow via HdrBlend's onSend.
- * "skyfix" = the deliberate, user-directed sky recolour tool. Kept separate
- * from Declutter/Enhance on purpose — those two refuse to touch the sky at
- * all (see prompts.ts), since silently changing weather/conditions is a real
- * listing-accuracy problem. Sky Fix exists so a user can still choose to do
- * it, explicitly, photo by photo.
  */
-type View = "process" | "hdr" | "skyfix";
+type View = "process" | "hdr";
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -51,6 +51,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("declutter");
   const [activeMode, setActiveMode] = useState<Mode>("interior");
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
+  const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
   const [dragging, setDragging] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -70,7 +71,7 @@ export default function Home() {
       note?: string,
       snapshot?: Pick<
         Job,
-        "downscaledDataUri" | "mode" | "tab" | "provider" | "width" | "height"
+        "downscaledDataUri" | "mode" | "tab" | "provider" | "sky" | "width" | "height"
       >
     ) => {
       // Prefer an explicit snapshot (avoids a race where jobsRef hasn't yet
@@ -87,6 +88,7 @@ export default function Home() {
             mode: source.mode,
             tab: source.tab,
             provider: source.provider,
+            sky: source.sky,
             width: source.width,
             height: source.height,
             note,
@@ -120,6 +122,7 @@ export default function Home() {
             mode: job.mode,
             tab: job.tab,
             provider: job.provider,
+            sky: job.sky,
             width: job.width,
             height: job.height,
           });
@@ -154,6 +157,7 @@ export default function Home() {
             mode,
             tab,
             provider: tab === "enhance" ? enhanceProvider : undefined,
+            sky: tab === "twilight" ? twilightSky : undefined,
             status: "queued",
             originalUrl,
             downscaledDataUri: dataUri,
@@ -167,6 +171,7 @@ export default function Home() {
             mode,
             tab,
             provider: tab === "enhance" ? enhanceProvider : undefined,
+            sky: tab === "twilight" ? twilightSky : undefined,
             status: "error",
             originalUrl,
             downscaledDataUri: "",
@@ -187,7 +192,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky]
   );
 
   const onDrop = useCallback(
@@ -309,45 +314,36 @@ export default function Home() {
         >
           HDR Blend
         </button>
-        <button
-          onClick={() => setView("skyfix")}
-          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
-            view === "skyfix"
-              ? "bg-white text-neutral-900 shadow-sm"
-              : "text-neutral-500 hover:text-neutral-800"
-          }`}
-        >
-          Sky Fix
-        </button>
       </div>
 
-      {/* Interior / Exterior selector — applies everywhere. Set BEFORE
-          uploading so new jobs are queued with the right prompt from the
-          start (avoids paying twice: once for an auto-processed wrong mode,
-          then again on Retry after switching it). */}
-      <div className="mb-4 flex items-center gap-2">
-        <span className="text-xs text-neutral-500">Shot type:</span>
-        <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
-          {(Object.keys(MODE_LABEL) as Mode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setActiveMode(m)}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                activeMode === m
-                  ? "bg-white text-neutral-900 shadow-sm"
-                  : "text-neutral-500 hover:text-neutral-800"
-              }`}
-            >
-              {MODE_LABEL[m]}
-            </button>
-          ))}
+      {/* Interior / Exterior selector — applies to every tab except Twilight
+          (which is always a front-of-house/pool hero shot, not a room). Set
+          BEFORE uploading so new jobs are queued with the right prompt from
+          the start (avoids paying twice: once for an auto-processed wrong
+          mode, then again on Retry after switching it). */}
+      {activeTab !== "twilight" && (
+        <div className="mb-4 flex items-center gap-2">
+          <span className="text-xs text-neutral-500">Shot type:</span>
+          <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+            {(Object.keys(MODE_LABEL) as Mode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setActiveMode(m)}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                  activeMode === m
+                    ? "bg-white text-neutral-900 shadow-sm"
+                    : "text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                {MODE_LABEL[m]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {view === "hdr" ? (
         <HdrBlend onSend={handleHandoffSend} />
-      ) : view === "skyfix" ? (
-        <SkyFix onSend={handleHandoffSend} />
       ) : (
         <>
           {/* Enhance tab: model selector */}
@@ -375,6 +371,30 @@ export default function Home() {
                 >
                   ChatGPT
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Twilight tab: sky reference picker. Default is the orange sunset;
+              this only decides which reference image gets sent alongside the
+              photo — it does not change the prompt itself. */}
+          {activeTab === "twilight" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Sky:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                {(Object.keys(SKY_LABEL) as TwilightSky[]).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setTwilightSky(s)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      twilightSky === s
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    {SKY_LABEL[s]}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -472,7 +492,7 @@ export default function Home() {
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Sky Fix is a separate, deliberate tool for recolouring an overcast sky — Declutter and Enhance never touch the sky on their own. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>
