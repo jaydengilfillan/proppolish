@@ -43,6 +43,18 @@ export const OPENAI_MODEL = "gpt-image-2";
 export const OPENAI_QUALITY: "low" | "medium" | "high" = "high";
 
 // ---------------------------------------------------------------------------
+// OpenAI vision (chat completions) — powers "Import from scan" on the Floor
+// Plan tool. This is a text+vision model, NOT an image generator: it reads a
+// CubiCasa export (and optionally a drone photo) and transcribes room labels
+// and printed dimensions, plus a rough starting layout. gpt-5.6-terra is a
+// mid-tier model (cheaper than the flagship Sol) — plenty for reading crisp,
+// computer-generated floor-plan text; bump to "gpt-5.6-sol" if it ever
+// struggles with a messier scan. Priced per-token by OpenAI, a few cents per
+// scan at most.
+// ---------------------------------------------------------------------------
+export const OPENAI_VISION_MODEL = "gpt-5.6-terra";
+
+// ---------------------------------------------------------------------------
 // Resolution / cost.
 //
 // Client-side downscaling resizes every upload so its LONGEST edge is <= MAX_EDGE

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { triggerDownload } from "@/lib/image";
+import { triggerDownload, downscaleImage } from "@/lib/image";
 
 interface Point {
   x: number;
@@ -125,6 +125,15 @@ export default function FloorPlan() {
     | null
   >(null);
   const svgRef = useRef<SVGSVGElement>(null);
+
+  // "Import from scan" state.
+  const [scanImage, setScanImage] = useState<{ dataUri: string; fileName: string } | null>(null);
+  const [droneImage, setDroneImage] = useState<{ dataUri: string; fileName: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | undefined>();
+  const [importNotes, setImportNotes] = useState<string | undefined>();
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const droneInputRef = useRef<HTMLInputElement>(null);
 
   const getSvgPoint = useCallback((e: { clientX: number; clientY: number }): Point => {
     const svg = svgRef.current;
@@ -291,6 +300,124 @@ export default function FloorPlan() {
     img.src = url;
   }, []);
 
+  const pickScan = useCallback(async (file: File) => {
+    setImportError(undefined);
+    const { dataUri } = await downscaleImage(file);
+    setScanImage({ dataUri, fileName: file.name });
+  }, []);
+
+  const pickDrone = useCallback(async (file: File) => {
+    setImportError(undefined);
+    const { dataUri } = await downscaleImage(file);
+    setDroneImage({ dataUri, fileName: file.name });
+  }, []);
+
+  const runImport = useCallback(async () => {
+    if (!scanImage) return;
+    setImporting(true);
+    setImportError(undefined);
+    setImportNotes(undefined);
+    try {
+      const resp = await fetch("/api/analyze-floorplan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scanImage: scanImage.dataUri,
+          droneImage: droneImage?.dataUri,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(data?.error || `Request failed (HTTP ${resp.status}).`);
+      }
+
+      const floors: {
+        name: string;
+        rooms: { label: string; dimensionText: string; x: number; y: number; width: number; height: number }[];
+      }[] = Array.isArray(data.floors) ? data.floors : [];
+      const lotBoundary: { x: number; y: number }[] = Array.isArray(data.lotBoundary) ? data.lotBoundary : [];
+      const driveway: { x: number; y: number }[] = Array.isArray(data.driveway) ? data.driveway : [];
+
+      const GAP = 40;
+      const TOP_MARGIN = 20;
+      const usableH = PLAN_H - TOP_MARGIN * 2;
+      const floorCount = Math.max(1, floors.length);
+      const slotW = (VB_W - GAP * (floorCount - 1)) / floorCount;
+
+      const newShapes: Shape[] = [];
+      floors.forEach((floor, floorIndex) => {
+        const offsetX = floorIndex * (slotW + GAP);
+        const scaleX = slotW / 1000;
+        const scaleY = usableH / 1000;
+        floor.rooms.forEach((room) => {
+          const x0 = offsetX + room.x * scaleX;
+          const y0 = TOP_MARGIN + room.y * scaleY;
+          const w = Math.max(10, room.width * scaleX);
+          const h = Math.max(10, room.height * scaleY);
+          newShapes.push({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            kind: "room",
+            points: [
+              { x: x0, y: y0 },
+              { x: x0 + w, y: y0 },
+              { x: x0 + w, y: y0 + h },
+              { x: x0, y: y0 + h },
+            ],
+            label: room.label,
+            dimensionText: room.dimensionText,
+          });
+        });
+      });
+
+      // Lot boundary / driveway are drafted against the ground floor's slot.
+      const groundScaleX = slotW / 1000;
+      const groundScaleY = usableH / 1000;
+      const toCanvasPoints = (pts: { x: number; y: number }[]): Point[] =>
+        pts.map((p) => ({
+          x: p.x * groundScaleX,
+          y: TOP_MARGIN + p.y * groundScaleY,
+        }));
+
+      if (lotBoundary.length >= 3) {
+        newShapes.unshift({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-lot`,
+          kind: "lot",
+          points: toCanvasPoints(lotBoundary),
+          label: "",
+          dimensionText: "",
+        });
+      }
+      if (driveway.length >= 3) {
+        newShapes.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-drv`,
+          kind: "driveway",
+          points: toCanvasPoints(driveway),
+          label: "",
+          dimensionText: "",
+        });
+      }
+
+      setShapes((prev) => [...prev, ...newShapes]);
+
+      const totalMatch = typeof data.totalAreaText === "string" ? data.totalAreaText.match(/[\d.]+/) : null;
+      if (totalMatch) {
+        setBrand((b) => ({ ...b, areaMode: "total", areaTotal: totalMatch[0] }));
+      }
+
+      const noteParts = [
+        "Imported -- check every label and dimension against the original scan before exporting.",
+      ];
+      if (data.areaBreakdownText) noteParts.push(`Per-floor breakdown on the scan: ${data.areaBreakdownText}`);
+      if (data.excludedAreasText) noteParts.push(`Excluded areas on the scan: ${data.excludedAreasText}`);
+      if (data.notes) noteParts.push(String(data.notes));
+      setImportNotes(noteParts.join(" "));
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed.");
+    } finally {
+      setImporting(false);
+    }
+  }, [scanImage, droneImage]);
+
   const areaText =
     brand.areaMode === "total"
       ? `Total - ${brand.areaTotal}m2`
@@ -300,13 +427,67 @@ export default function FloorPlan() {
     <div className="flex flex-col gap-4 lg:flex-row">
       <div className="flex flex-1 flex-col gap-3">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-medium">Every number here is typed by you, not detected.</p>
+          <p className="font-medium">Every number on the finished plan needs your eyes on it before export.</p>
           <p className="mt-1">
-            Draw each shape (click to place points, click near the start point or hit Finish to
-            close it), then type its label and dimensions in the panel on the right. Nothing is
-            traced from a photo -- that keeps every measurement on the finished plan exactly what
-            you entered.
+            Import from a CubiCasa scan to auto-draft rooms (label, dimension text and a rough
+            starting position) instead of drawing from scratch -- or draw shapes by hand below.
+            Either way, drag shapes into their correct final position/size and double-check every
+            imported label and dimension against the original scan -- nothing is exported until
+            you&apos;ve reviewed it.
           </p>
+        </div>
+
+        <div className="rounded-xl border border-neutral-200 bg-white p-3">
+          <p className="mb-2 text-sm font-medium">Import from CubiCasa scan</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => scanInputRef.current?.click()}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium transition hover:bg-neutral-50"
+            >
+              {scanImage ? `Scan: ${scanImage.fileName}` : "Choose CubiCasa scan (required)"}
+            </button>
+            <button
+              onClick={() => droneInputRef.current?.click()}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium transition hover:bg-neutral-50"
+            >
+              {droneImage ? `Drone: ${droneImage.fileName}` : "Choose drone photo (optional)"}
+            </button>
+            <button
+              onClick={runImport}
+              disabled={!scanImage || importing}
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white transition disabled:opacity-40"
+            >
+              {importing ? "Analysing…" : "Import"}
+            </button>
+            <input
+              ref={scanInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickScan(f);
+                e.target.value = "";
+              }}
+            />
+            <input
+              ref={droneInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickDrone(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+          {importError && (
+            <p className="mt-2 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">{importError}</p>
+          )}
+          {importNotes && (
+            <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1.5 text-xs text-emerald-800">{importNotes}</p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
