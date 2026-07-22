@@ -94,6 +94,115 @@ function polygonCentroid(points: Point[]): Point {
   return { x: sum.x / n, y: sum.y / n };
 }
 
+function polygonBounds(points: Point[]): { width: number; height: number } {
+  if (points.length === 0) return { width: 0, height: 0 };
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  return { width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+}
+
+/** Fit label/dimension font sizes and whether dimension text fits at all,
+ * so text never overflows a small room's box. */
+function fitTextToBox(width: number, height: number): { labelSize: number; dimSize: number; showDim: boolean } {
+  const shortSide = Math.min(width, height);
+  const labelSize = Math.max(9, Math.min(20, shortSide / 2.2));
+  const dimSize = Math.max(8, Math.min(15, shortSide / 3));
+  const showDim = height > 42 && width > 55;
+  return { labelSize, dimSize, showDim };
+}
+
+/** Extract "W x H" in metres from a printed dimension string like "2.81 m x 6.00 m". */
+function parseDimensionMetres(text: string): { w: number; h: number } | null {
+  const nums = text.match(/\d+(?:\.\d+)?/g);
+  if (!nums || nums.length < 2) return null;
+  const w = parseFloat(nums[0]);
+  const h = parseFloat(nums[1]);
+  if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return null;
+  return { w, h };
+}
+
+interface PackedRoom {
+  label: string;
+  dimensionText: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Turn the vision model's rough per-room boxes into a tight, wall-sharing
+ * layout instead of scattered floating rectangles. The model's x/y/width/
+ * height are only used to work out READING ORDER (which row a room
+ * belongs in, left-to-right within it) -- actual box SIZE comes from
+ * parsing the room's own printed dimension text, which is far more
+ * trustworthy than an LLM's pixel-area guess. Rooms are then packed
+ * edge-to-edge in rows, uniformly scaled to fit the available slot without
+ * distorting real-world proportions.
+ */
+function packFloorRooms(
+  rooms: { label: string; dimensionText: string; x: number; y: number; width: number; height: number }[],
+  slotW: number,
+  slotH: number
+): PackedRoom[] {
+  if (rooms.length === 0) return [];
+
+  const withMetres = rooms.map((r) => {
+    const dims = parseDimensionMetres(r.dimensionText);
+    return {
+      ...r,
+      cy: r.y + r.height / 2,
+      cx: r.x + r.width / 2,
+      wM: dims?.w ?? 3,
+      hM: dims?.h ?? 3,
+    };
+  });
+
+  // Group into rows by proximity of the AI's suggested vertical centre.
+  withMetres.sort((a, b) => a.cy - b.cy);
+  const ROW_THRESH = 130; // in the model's 0-1000 local coordinate space
+  const rows: (typeof withMetres)[] = [];
+  for (const r of withMetres) {
+    const last = rows[rows.length - 1];
+    const lastAvgCy = last ? last.reduce((s, x) => s + x.cy, 0) / last.length : null;
+    if (last && lastAvgCy !== null && Math.abs(r.cy - lastAvgCy) < ROW_THRESH) {
+      last.push(r);
+    } else {
+      rows.push([r]);
+    }
+  }
+  rows.forEach((row) => row.sort((a, b) => a.cx - b.cx));
+
+  // Work out a single metres-per-unit scale so real proportions aren't
+  // stretched, fitting both the widest row and the total stacked height.
+  const rowWidthsM = rows.map((row) => row.reduce((s, r) => s + r.wM, 0));
+  const rowHeightsM = rows.map((row) => Math.max(...row.map((r) => r.hM)));
+  const maxRowWidthM = Math.max(1, ...rowWidthsM);
+  const totalHeightM = rowHeightsM.reduce((s, h) => s + h, 0) || 1;
+  const scale = Math.min(slotW / maxRowWidthM, slotH / totalHeightM);
+
+  const packed: PackedRoom[] = [];
+  let y = 0;
+  rows.forEach((row, i) => {
+    let x = 0;
+    const rowHeightM = rowHeightsM[i];
+    row.forEach((r) => {
+      packed.push({
+        label: r.label,
+        dimensionText: r.dimensionText,
+        x: x * scale,
+        y: y * scale,
+        width: r.wM * scale,
+        height: r.hM * scale,
+      });
+      x += r.wM;
+    });
+    y += rowHeightM;
+  });
+
+  return packed;
+}
+
 /**
  * Floor Plan — a client-side vector floor plan builder that renders a
  * branded, agency-style output (matching a real Ray White template pulled
@@ -335,8 +444,12 @@ export default function FloorPlan() {
         name: string;
         rooms: { label: string; dimensionText: string; x: number; y: number; width: number; height: number }[];
       }[] = Array.isArray(data.floors) ? data.floors : [];
-      const lotBoundary: { x: number; y: number }[] = Array.isArray(data.lotBoundary) ? data.lotBoundary : [];
-      const driveway: { x: number; y: number }[] = Array.isArray(data.driveway) ? data.driveway : [];
+      // Only trust a lot/driveway shape when a drone photo was actually
+      // supplied this run -- guards against the model drafting one anyway.
+      const lotBoundary: { x: number; y: number }[] =
+        droneImage && Array.isArray(data.lotBoundary) ? data.lotBoundary : [];
+      const driveway: { x: number; y: number }[] =
+        droneImage && Array.isArray(data.driveway) ? data.driveway : [];
 
       const GAP = 40;
       const TOP_MARGIN = 20;
@@ -347,29 +460,28 @@ export default function FloorPlan() {
       const newShapes: Shape[] = [];
       floors.forEach((floor, floorIndex) => {
         const offsetX = floorIndex * (slotW + GAP);
-        const scaleX = slotW / 1000;
-        const scaleY = usableH / 1000;
-        floor.rooms.forEach((room) => {
-          const x0 = offsetX + room.x * scaleX;
-          const y0 = TOP_MARGIN + room.y * scaleY;
-          const w = Math.max(10, room.width * scaleX);
-          const h = Math.max(10, room.height * scaleY);
+        const packed = packFloorRooms(floor.rooms, slotW, usableH);
+        packed.forEach((p) => {
+          const x0 = offsetX + p.x;
+          const y0 = TOP_MARGIN + p.y;
           newShapes.push({
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             kind: "room",
             points: [
               { x: x0, y: y0 },
-              { x: x0 + w, y: y0 },
-              { x: x0 + w, y: y0 + h },
-              { x: x0, y: y0 + h },
+              { x: x0 + p.width, y: y0 },
+              { x: x0 + p.width, y: y0 + p.height },
+              { x: x0, y: y0 + p.height },
             ],
-            label: room.label,
-            dimensionText: room.dimensionText,
+            label: p.label,
+            dimensionText: p.dimensionText,
           });
         });
       });
 
-      // Lot boundary / driveway are drafted against the ground floor's slot.
+      // Lot boundary / driveway are drafted against the ground floor's slot,
+      // using the AI's rough 0-1000 coordinates directly (no real dimension
+      // text to pack against here, unlike rooms).
       const groundScaleX = slotW / 1000;
       const groundScaleY = usableH / 1000;
       const toCanvasPoints = (pts: { x: number; y: number }[]): Point[] =>
@@ -561,6 +673,9 @@ export default function FloorPlan() {
               .concat(shapes.filter((s) => s.kind !== "lot"))
               .map((s) => {
                 const c = polygonCentroid(s.points);
+                const bounds = polygonBounds(s.points);
+                const fit = fitTextToBox(bounds.width, bounds.height);
+                const showDimText = s.dimensionText && fit.showDim;
                 return (
                   <g key={s.id}>
                     <path
@@ -571,14 +686,14 @@ export default function FloorPlan() {
                       onPointerDown={(e) => onShapeBodyPointerDown(e, s.id)}
                       className="cursor-move"
                     />
-                    {(s.label || s.dimensionText) && (
+                    {(s.label || showDimText) && (
                       <g pointerEvents="none">
                         {s.label && (
                           <text
                             x={c.x}
-                            y={c.y - (s.dimensionText ? 10 : 0)}
+                            y={c.y - (showDimText ? fit.labelSize * 0.6 : 0)}
                             textAnchor="middle"
-                            fontSize="20"
+                            fontSize={fit.labelSize}
                             fontWeight={700}
                             fill="#1a1a1a"
                             fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
@@ -586,12 +701,12 @@ export default function FloorPlan() {
                             {s.label}
                           </text>
                         )}
-                        {s.dimensionText && (
+                        {showDimText && (
                           <text
                             x={c.x}
-                            y={c.y + 16}
+                            y={c.y + fit.labelSize * 0.9}
                             textAnchor="middle"
-                            fontSize="15"
+                            fontSize={fit.dimSize}
                             fill="#1a1a1a"
                             fontFamily="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
                           >
