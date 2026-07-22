@@ -17,6 +17,7 @@ import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
 import HdrBlend from "@/components/HdrBlend";
 import RoomMatch from "@/components/RoomMatch";
+import FloorPlan from "@/components/FloorPlan";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -46,8 +47,10 @@ const MODE_LABEL: Record<Mode, string> = {
  * then gets handed off into the "process" flow via HdrBlend's onSend.
  * "match" = Room Match: link multiple angles of one room so they get staged
  * consistently instead of independently. Self-contained, like "hdr".
+ * "floorplan" = Floor Plan builder: hand-drawn shapes + typed labels,
+ * rendered into a branded template. Zero AI calls, entirely client-side.
  */
-type View = "process" | "hdr" | "match";
+type View = "process" | "hdr" | "match" | "floorplan";
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -354,6 +357,16 @@ export default function Home() {
         >
           Room Match
         </button>
+        <button
+          onClick={() => setView("floorplan")}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            view === "floorplan"
+              ? "bg-white text-neutral-900 shadow-sm"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          Floor Plan
+        </button>
       </div>
 
       {/* Interior / Exterior selector — applies to every tab except Twilight
@@ -386,6 +399,8 @@ export default function Home() {
         <HdrBlend onSend={handleHandoffSend} />
       ) : view === "match" ? (
         <RoomMatch />
+      ) : view === "floorplan" ? (
+        <FloorPlan />
       ) : (
         <>
           {/* Enhance / Prompt tabs: model selector. Each tab remembers its
@@ -586,7 +601,7 @@ export default function Home() {
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Prompt sends your own instruction to the model directly, with none of the built-in safety rules the other tabs apply — use it deliberately. Room Match links multiple angles of one room to the same staged furniture — a best effort, not a geometric guarantee, since no model here understands 3D space. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Prompt sends your own instruction to the model directly, with none of the built-in safety rules the other tabs apply — use it deliberately. Room Match links multiple angles of one room to the same staged furniture — a best effort, not a geometric guarantee, since no model here understands 3D space. Floor Plan has no AI involved at all — every shape and number is drawn and typed by you, rendered into a branded template. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>
