@@ -16,6 +16,7 @@ import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
 import HdrBlend from "@/components/HdrBlend";
+import RoomMatch from "@/components/RoomMatch";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -43,8 +44,10 @@ const MODE_LABEL: Record<Mode, string> = {
  * "process" = the normal Declutter/Enhance/Restage/Twilight upload + job grid.
  * "hdr" = the bracket-blending panel, which produces one merged photo that
  * then gets handed off into the "process" flow via HdrBlend's onSend.
+ * "match" = Room Match: link multiple angles of one room so they get staged
+ * consistently instead of independently. Self-contained, like "hdr".
  */
-type View = "process" | "hdr";
+type View = "process" | "hdr" | "match";
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -341,6 +344,16 @@ export default function Home() {
         >
           HDR Blend
         </button>
+        <button
+          onClick={() => setView("match")}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+            view === "match"
+              ? "bg-white text-neutral-900 shadow-sm"
+              : "text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          Room Match
+        </button>
       </div>
 
       {/* Interior / Exterior selector — applies to every tab except Twilight
@@ -348,7 +361,7 @@ export default function Home() {
           BEFORE uploading so new jobs are queued with the right prompt from
           the start (avoids paying twice: once for an auto-processed wrong
           mode, then again on Retry after switching it). */}
-      {activeTab !== "twilight" && activeTab !== "general" && (
+      {view === "process" && activeTab !== "twilight" && activeTab !== "general" && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -371,6 +384,8 @@ export default function Home() {
 
       {view === "hdr" ? (
         <HdrBlend onSend={handleHandoffSend} />
+      ) : view === "match" ? (
+        <RoomMatch />
       ) : (
         <>
           {/* Enhance / Prompt tabs: model selector. Each tab remembers its
@@ -571,7 +586,7 @@ export default function Home() {
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Prompt sends your own instruction to the model directly, with none of the built-in safety rules the other tabs apply — use it deliberately. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Prompt sends your own instruction to the model directly, with none of the built-in safety rules the other tabs apply — use it deliberately. Room Match links multiple angles of one room to the same staged furniture — a best effort, not a geometric guarantee, since no model here understands 3D space. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>

@@ -54,21 +54,25 @@ ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions
  */
 export const RESTAGE_INTERIOR_PROMPT = `Use the original room photo as the base. Preserve the EXACT camera angle, perspective, composition, room dimensions, architecture, walls, windows, doors, flooring, ceiling, lighting, and all permanent fixtures.
 
-Remove the existing movable furniture and décor, then restage the room using the current setup as the direct reference for what belongs there. Keep the same furniture layout, positioning, orientation, scale, spacing, and intended function of each area, but replace each item with a more modern, refined, higher-quality version of the same type — for example, an existing sofa becomes a nicer updated sofa in the same position and orientation, a coffee table becomes a more contemporary equivalent, and any dining setting, bed, side table, rug, lamp, artwork or accessory becomes an improved version suited to the room. Only include furniture types that were already represented in the original room.
+If the room already has furniture: remove the existing movable furniture and décor, then restage using the current setup as the direct reference for what belongs there. Keep the same furniture layout, positioning, orientation, scale, spacing, and intended function of each area, but replace each item with a more modern, refined, higher-quality version of the same type — for example, an existing sofa becomes a nicer updated sofa in the same position and orientation, a coffee table becomes a more contemporary equivalent, and any dining setting, bed, side table, rug, lamp, artwork or accessory becomes an improved version suited to the room. Only include furniture types that were already represented — do not introduce new categories of furniture into an already-furnished room.
 
-Maintain a cohesive, neutral, high-end real estate styling with tasteful, minimal décor. The new furniture must fit the room naturally and realistically, at the correct scale, without overcrowding or changing the layout.
+If the room is empty or near-empty (no existing furniture to reference): stage it from scratch with an appropriate, tasteful furniture set for its evident function — e.g. a living room gets a sofa, coffee table and rug; a bedroom gets a bed, side tables and a lamp; a dining area gets a table and chairs; a kitchen gets simple styling accessories only, no structural changes. Place everything at a realistic scale for the room's actual dimensions, in a natural, functional layout that respects the room's proportions, doorways and walkways.
 
-ABSOLUTELY DO NOT (this is a legal requirement): relocate furniture to a different wall or area, redesign the room, change room dimensions or layout, alter the architecture, add or remove any wall, window, door, ceiling, floor, or built-in fixture; remove or conceal any permanent defect (cracks, damp, mould, water stains, damage); introduce furniture types, quantities, or features not already represented in the original setup; never remove window coverings, blinds, curtains or security screens; never reposition or resize built-in appliances. Preserve the property's true architecture and every permanent feature EXACTLY as photographed.
+Maintain a cohesive, neutral, high-end real estate styling with tasteful, minimal décor. The furniture must fit the room naturally and realistically, at the correct scale, without overcrowding or changing the layout.
+
+ABSOLUTELY DO NOT (this is a legal requirement): relocate furniture to a different wall or area, redesign the room, change room dimensions or layout, alter the architecture, add or remove any wall, window, door, ceiling, floor, or built-in fixture; remove or conceal any permanent defect (cracks, damp, mould, water stains, damage); if furniture already exists, introduce furniture types, quantities, or features not already represented in the original setup; never remove window coverings, blinds, curtains or security screens; never reposition or resize built-in appliances. Preserve the property's true architecture and every permanent feature EXACTLY as photographed.
 
 Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
 
 export const RESTAGE_EXTERIOR_PROMPT = `Use the original exterior photo as the base. Preserve the EXACT camera angle, perspective, composition, and framing — do not re-compose or change the viewpoint. Preserve the house roof, walls, brickwork, footprint, windows, driveway, fences, landscaping, garden beds, lawn, and every permanent structure exactly as photographed.
 
-Remove the existing movable outdoor furniture and décor (patio sets, outdoor lounges, umbrellas, outdoor rugs, planters, cushions, string lights, BBQs), then restage the outdoor area using the current setup as the direct reference for what belongs there. Keep the same layout, positioning, orientation, scale and intended function of each area, but replace each item with a more modern, refined, higher-quality version of the same type. Only include outdoor furniture types that were already represented in the original setup.
+If the outdoor area already has furniture: remove the existing movable outdoor furniture and décor (patio sets, outdoor lounges, umbrellas, outdoor rugs, planters, cushions, string lights, BBQs), then restage using the current setup as the direct reference for what belongs there. Keep the same layout, positioning, orientation, scale and intended function of each area, but replace each item with a more modern, refined, higher-quality version of the same type. Only include outdoor furniture types that were already represented — do not introduce new categories into an already-furnished space.
+
+If the outdoor area is empty or near-empty (no existing furniture to reference): stage it from scratch with an appropriate, tasteful outdoor furniture set for its evident function — e.g. a back entertaining area gets an outdoor lounge or dining setting; a pool surround gets sun loungers. Place everything at a realistic scale for the space's actual dimensions, in a natural layout that respects paving, walkways and sightlines.
 
 Maintain a cohesive, neutral, high-end real estate styling with tasteful, minimal outdoor décor that fits the space naturally and realistically at the correct scale.
 
-ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, driveway layout, or landscaping; replace the sky or change the weather/time of day; remove, add or alter any neighbouring house, building, road, power line or structure; relocate outdoor furniture to a different area or introduce furniture types not already represented in the original setup. Preserve the true building, landscaping and layout EXACTLY as photographed, from the same viewpoint.
+ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, driveway layout, or landscaping; replace the sky or change the weather/time of day; remove, add or alter any neighbouring house, building, road, power line or structure; relocate outdoor furniture to a different area; if furniture already exists, introduce furniture types not already represented in the original setup. Preserve the true building, landscaping and layout EXACTLY as photographed, from the same viewpoint.
 
 Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
 
@@ -98,6 +102,18 @@ Keep it fully photorealistic and believable — no over-processing, no HDR halos
 export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface textures visible in the frame — driveways, paths, gutters, downpipes, concrete and paving. Where they show dirt, staining, moss, algae, cracks or general blemishes, clean and refresh the texture/finish so it looks well maintained, using the SAME colour, material and style already present (e.g. concrete stays the same grey concrete — do not change it to pavers, a different colour, or a different material). Do not change the shape, layout, size or material type of these surfaces — texture and cleanliness only.`;
 
 /**
+ * "Room Match" addendum — appended to a Restage prompt when a second image is
+ * supplied: a reference photo of the SAME room, a different angle, already
+ * staged/restaged. Used by the Room Match tool so multiple angles of one room
+ * land on matching furniture instead of each angle being staged in isolation.
+ *
+ * Caveat this prompt can't fully solve: 2D image models have no real 3D
+ * understanding of the room, so this asks for consistent furniture choices
+ * and plausible placement, not geometrically perfect alignment across angles.
+ */
+export const MATCH_CONSISTENCY_ADDENDUM = `A second reference image is provided: this exact same room, already staged, photographed from a different angle. Match your result for THIS photo to that reference as closely as possible — the same sofa, same coffee table, same rug, same artwork, same lighting fixtures, same colour palette and same overall styling should appear in both, just seen from this photo's own camera angle and framing. Do not copy the reference image directly — place each piece of furniture in a position and orientation that is physically plausible for what this specific angle would actually show of the same room, including anything from the reference that would logically be out of frame or hidden from here. The goal: someone flipping between these photos should recognise it as the same room, staged once, not two different rooms.`;
+
+/**
  * Build the final prompt for a job.
  *
  * The optional user note is appended AFTER the base prompt so the DO-NOT rules
@@ -110,7 +126,8 @@ export function buildPrompt(
   mode: Mode,
   note?: string,
   provider?: Provider,
-  customPrompt?: string
+  customPrompt?: string,
+  matchReference?: boolean
 ): string {
   let base: string;
   if (tab === "general") {
@@ -130,6 +147,10 @@ export function buildPrompt(
 
   if (tab === "enhance" && mode === "exterior" && provider === "openai") {
     base = base + "\n\n" + OPENAI_EXTERIOR_TEXTURE_INSTRUCTION;
+  }
+
+  if (tab === "restage" && matchReference) {
+    base = base + "\n\n" + MATCH_CONSISTENCY_ADDENDUM;
   }
 
   const trimmed = note?.trim();

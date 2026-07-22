@@ -21,12 +21,20 @@ interface ProcessBody {
   provider?: unknown; // "fal" | "openai" (only meaningful when tab === "enhance" or "general")
   sky?: unknown; // "orange" | "purple" (only meaningful when tab === "twilight")
   customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
+  referenceImage?: unknown; // Room Match: URL/data URI of the anchor's staged result, only meaningful when tab === "restage"
   width?: unknown; // original (pre-downscale) width, used by the OpenAI provider
   height?: unknown; // original (pre-downscale) height, used by the OpenAI provider
 }
 
 function isDataUri(v: unknown): v is string {
     return typeof v === "string" && v.startsWith("data:image/") && v.includes("base64,");
+}
+
+/** Accepts either a base64 data URI or a plain http(s) URL — Room Match's
+ * reference image is normally a FAL-hosted result URL, not a data URI. */
+function isImageRef(v: unknown): v is string {
+    if (typeof v !== "string" || !v.trim()) return false;
+    return isDataUri(v) || /^https?:\/\//.test(v);
 }
 
 export async function POST(req: NextRequest) {
@@ -95,15 +103,33 @@ export async function POST(req: NextRequest) {
     customPrompt = trimmedPrompt;
   }
 
-  const prompt = buildPrompt(tab, mode, note, provider, customPrompt);
+  // Room Match: a second image of the SAME room, already staged from a
+  // different angle, used as a consistency reference. Only meaningful (and
+  // optional) on the Restage tab.
+  let referenceImage: string | undefined;
+  if (tab === "restage" && body.referenceImage !== undefined && body.referenceImage !== null) {
+    if (!isImageRef(body.referenceImage)) {
+      return NextResponse.json(
+        { error: "referenceImage must be an image URL or base64 data URI." },
+        { status: 400 }
+      );
+    }
+    referenceImage = body.referenceImage;
+  }
 
-  // For every tab except Twilight, FAL/OpenAI receive just the one photo.
-  // Twilight appends a second image: the absolute URL of the sky reference
-  // the user picked (FAL fetches images by URL — a relative path won't work).
+  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage);
+
+  // For every tab except Twilight/Room-Match, FAL/OpenAI receive just the one
+  // photo. Twilight appends the absolute URL of the sky reference (FAL fetches
+  // images by URL — a relative path won't work). Room Match appends the
+  // anchor's already-staged result so this angle can be generated to match it.
   const imageUrls: string[] = [body.image as string];
   if (tab === "twilight") {
     const skyPath = TWILIGHT_SKIES[sky];
     imageUrls.push(new URL(skyPath, req.nextUrl.origin).toString());
+  }
+  if (referenceImage) {
+    imageUrls.push(referenceImage);
   }
 
   try {
