@@ -26,6 +26,7 @@ const TAB_LABEL: Record<Tab, string> = {
   enhance: "Enhance",
   restage: "Restage",
   twilight: "Twilight",
+  general: "Prompt",
 };
 
 const SKY_LABEL: Record<TwilightSky, string> = {
@@ -52,6 +53,8 @@ export default function Home() {
   const [activeMode, setActiveMode] = useState<Mode>("interior");
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
   const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
+  const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
+  const [generalPrompt, setGeneralPrompt] = useState("");
   const [dragging, setDragging] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -71,7 +74,14 @@ export default function Home() {
       note?: string,
       snapshot?: Pick<
         Job,
-        "downscaledDataUri" | "mode" | "tab" | "provider" | "sky" | "width" | "height"
+        | "downscaledDataUri"
+        | "mode"
+        | "tab"
+        | "provider"
+        | "sky"
+        | "customPrompt"
+        | "width"
+        | "height"
       >
     ) => {
       // Prefer an explicit snapshot (avoids a race where jobsRef hasn't yet
@@ -89,6 +99,7 @@ export default function Home() {
             tab: source.tab,
             provider: source.provider,
             sky: source.sky,
+            customPrompt: source.customPrompt,
             width: source.width,
             height: source.height,
             note,
@@ -123,6 +134,7 @@ export default function Home() {
             tab: job.tab,
             provider: job.provider,
             sky: job.sky,
+            customPrompt: job.customPrompt,
             width: job.width,
             height: job.height,
           });
@@ -144,6 +156,14 @@ export default function Home() {
       );
       if (files.length === 0) return;
 
+      // Prompt tab requires the user to type something before any photo can
+      // be queued — there is no fallback template to fall back to.
+      const trimmedGeneralPrompt = generalPrompt.trim();
+      if (tab === "general" && !trimmedGeneralPrompt) return;
+
+      const provider =
+        tab === "enhance" ? enhanceProvider : tab === "general" ? generalProvider : undefined;
+
       setLoadingFiles(true);
       const newJobs: Job[] = [];
       for (const file of files) {
@@ -156,8 +176,9 @@ export default function Home() {
             fileName: file.name,
             mode,
             tab,
-            provider: tab === "enhance" ? enhanceProvider : undefined,
+            provider,
             sky: tab === "twilight" ? twilightSky : undefined,
+            customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "queued",
             originalUrl,
             downscaledDataUri: dataUri,
@@ -170,8 +191,9 @@ export default function Home() {
             fileName: file.name,
             mode,
             tab,
-            provider: tab === "enhance" ? enhanceProvider : undefined,
+            provider,
             sky: tab === "twilight" ? twilightSky : undefined,
+            customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "error",
             originalUrl,
             downscaledDataUri: "",
@@ -192,7 +214,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, generalProvider, generalPrompt]
   );
 
   const onDrop = useCallback(
@@ -276,7 +298,12 @@ export default function Home() {
   );
 
   const costHint =
-    activeTab === "enhance" && enhanceProvider === "openai" ? OPENAI_COST_HINT : COST_HINT;
+    (activeTab === "enhance" && enhanceProvider === "openai") ||
+    (activeTab === "general" && generalProvider === "openai")
+      ? OPENAI_COST_HINT
+      : COST_HINT;
+
+  const promptRequiredButMissing = activeTab === "general" && !generalPrompt.trim();
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -321,7 +348,7 @@ export default function Home() {
           BEFORE uploading so new jobs are queued with the right prompt from
           the start (avoids paying twice: once for an auto-processed wrong
           mode, then again on Retry after switching it). */}
-      {activeTab !== "twilight" && (
+      {activeTab !== "twilight" && activeTab !== "general" && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -346,15 +373,19 @@ export default function Home() {
         <HdrBlend onSend={handleHandoffSend} />
       ) : (
         <>
-          {/* Enhance tab: model selector */}
-          {activeTab === "enhance" && (
+          {/* Enhance / Prompt tabs: model selector. Each tab remembers its
+              own last-picked provider (enhanceProvider vs generalProvider)
+              rather than sharing one, so switching tabs doesn't surprise you. */}
+          {(activeTab === "enhance" || activeTab === "general") && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Model:</span>
               <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
                 <button
-                  onClick={() => setEnhanceProvider("fal")}
+                  onClick={() =>
+                    activeTab === "enhance" ? setEnhanceProvider("fal") : setGeneralProvider("fal")
+                  }
                   className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                    enhanceProvider === "fal"
+                    (activeTab === "enhance" ? enhanceProvider : generalProvider) === "fal"
                       ? "bg-white text-neutral-900 shadow-sm"
                       : "text-neutral-500 hover:text-neutral-800"
                   }`}
@@ -362,9 +393,13 @@ export default function Home() {
                   Nano Banana
                 </button>
                 <button
-                  onClick={() => setEnhanceProvider("openai")}
+                  onClick={() =>
+                    activeTab === "enhance"
+                      ? setEnhanceProvider("openai")
+                      : setGeneralProvider("openai")
+                  }
                   className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                    enhanceProvider === "openai"
+                    (activeTab === "enhance" ? enhanceProvider : generalProvider) === "openai"
                       ? "bg-white text-neutral-900 shadow-sm"
                       : "text-neutral-500 hover:text-neutral-800"
                   }`}
@@ -372,6 +407,27 @@ export default function Home() {
                   ChatGPT
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Prompt tab: free-text prompt box. This IS the whole prompt sent
+              to the model — no template, no guardrails — so a photo can't be
+              queued until something is typed here. */}
+          {activeTab === "general" && (
+            <div className="mb-4 flex flex-col gap-1">
+              <span className="text-xs text-neutral-500">Prompt:</span>
+              <textarea
+                value={generalPrompt}
+                onChange={(e) => setGeneralPrompt(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                placeholder='e.g. "Remove the wet/rain look from the driveway and make it look dry"'
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
+              />
+              <p className="text-[11px] text-neutral-400">
+                Sent to the model exactly as typed — no built-in decluttering or
+                safety rules apply here, so describe exactly what you want.
+              </p>
             </div>
           )}
 
@@ -403,37 +459,60 @@ export default function Home() {
           <div
             onDragOver={(e) => {
               e.preventDefault();
-              setDragging(true);
+              if (!promptRequiredButMissing) setDragging(true);
             }}
             onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            onClick={() => fileInputRef.current?.click()}
+            onDrop={(e) => {
+              if (promptRequiredButMissing) {
+                e.preventDefault();
+                setDragging(false);
+                return;
+              }
+              onDrop(e);
+            }}
+            onClick={() => {
+              if (promptRequiredButMissing) return;
+              fileInputRef.current?.click();
+            }}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => {
+              if (promptRequiredButMissing) return;
               if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
             }}
-            className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition ${
-              dragging
-                ? "border-neutral-900 bg-neutral-100"
-                : "border-neutral-300 bg-white hover:border-neutral-400"
+            className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-10 text-center transition ${
+              promptRequiredButMissing
+                ? "cursor-not-allowed border-neutral-200 bg-neutral-50 opacity-60"
+                : "cursor-pointer " +
+                  (dragging
+                    ? "border-neutral-900 bg-neutral-100"
+                    : "border-neutral-300 bg-white hover:border-neutral-400")
             }`}
           >
-            <p className="text-base font-medium">
-              Drag &amp; drop photos here, or click to choose
-            </p>
-            <p className="text-xs text-neutral-500">
-              JPEG, PNG or WEBP · up to ~30 at a time · {costHint}
-            </p>
-            <p className="text-[11px] text-neutral-400">
-              Resized to {MAX_EDGE}px in your browser before upload. HEIC is not
-              supported in v1.
-            </p>
+            {promptRequiredButMissing ? (
+              <p className="text-sm font-medium text-neutral-500">
+                Type a prompt above first
+              </p>
+            ) : (
+              <>
+                <p className="text-base font-medium">
+                  Drag &amp; drop photos here, or click to choose
+                </p>
+                <p className="text-xs text-neutral-500">
+                  JPEG, PNG or WEBP · up to ~30 at a time · {costHint}
+                </p>
+                <p className="text-[11px] text-neutral-400">
+                  Resized to {MAX_EDGE}px in your browser before upload. HEIC is
+                  not supported in v1.
+                </p>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"
               accept={ACCEPTED_TYPES.join(",")}
               multiple
+              disabled={promptRequiredButMissing}
               className="hidden"
               onChange={(e) => {
                 if (e.target.files?.length) addFiles(e.target.files);
@@ -492,7 +571,7 @@ export default function Home() {
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
         Outputs are AI-edited. This tool declutters movable items and applies
         photographic finishing only — it is written to never remove permanent
-        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Always eyeball
+        defects, alter structure, or change neighbouring property. Restage additionally replaces furniture and décor with styled equivalents in the same layout. HDR Blend combines your own bracket exposures using real pixel data — no AI is involved in that step. Twilight replaces the sky with your chosen reference and turns on existing exterior lighting only — it does not add fixtures or move anything. Prompt sends your own instruction to the model directly, with none of the built-in safety rules the other tabs apply — use it deliberately. Always eyeball
         exterior shots: the model occasionally re-composes them — hit Retry if the
         framing changed.
       </footer>

@@ -67,12 +67,12 @@ export default function JobCard({ job, onRetry }: Props) {
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
               {SKY_LABEL[job.sky ?? "orange"]}
             </span>
-          ) : (
+          ) : job.tab !== "general" ? (
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
               {MODE_LABEL[job.mode]}
             </span>
-          )}
-          {job.tab === "enhance" && job.provider ? (
+          ) : null}
+          {(job.tab === "enhance" || job.tab === "general") && job.provider ? (
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-600">
               {job.provider === "openai" ? "ChatGPT" : "Nano Banana"}
             </span>
@@ -84,6 +84,15 @@ export default function JobCard({ job, onRetry }: Props) {
           </span>
         </div>
       </div>
+
+      {job.tab === "general" && job.customPrompt && (
+        <p
+          className="truncate text-[11px] text-neutral-400"
+          title={job.customPrompt}
+        >
+          “{job.customPrompt}”
+        </p>
+      )}
 
       {/* Media area */}
       {job.status === "done" && job.resultUrl ? (

@@ -11,7 +11,7 @@ import type { Provider } from "./config";
 export type Mode = "interior" | "exterior";
 
 /** Which top-level feature tab the job was created under. */
-export type Tab = "declutter" | "enhance" | "restage" | "twilight";
+export type Tab = "declutter" | "enhance" | "restage" | "twilight" | "general";
 
 /** Which sky reference image Twilight jobs should be composited against. */
 export type TwilightSky = "orange" | "purple";
@@ -105,9 +105,20 @@ export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface te
  * note while respecting those rules. The optional provider is used to append
  * provider-specific instructions (currently: OpenAI exterior texture cleanup).
  */
-export function buildPrompt(tab: Tab, mode: Mode, note?: string, provider?: Provider): string {
+export function buildPrompt(
+  tab: Tab,
+  mode: Mode,
+  note?: string,
+  provider?: Provider,
+  customPrompt?: string
+): string {
   let base: string;
-  if (tab === "twilight") {
+  if (tab === "general") {
+    // "Prompt" tab: the user's own text IS the whole prompt — no template,
+    // no DO-NOT guardrails, no legal-safety scaffolding. That's the deal:
+    // full control, so full responsibility for what it does to the photo.
+    base = (customPrompt ?? "").trim();
+  } else if (tab === "twilight") {
     base = TWILIGHT_PROMPT;
   } else if (tab === "enhance") {
     base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;

@@ -9,10 +9,12 @@ export interface Job {
     mode: Mode;
     /** Which top-level tab this job was created under. */
   tab: Tab;
-    /** Which model to use — only meaningful when tab === "enhance". */
+    /** Which model to use — only meaningful when tab === "enhance" or "general". */
   provider?: Provider;
     /** Which sky reference to composite against — only meaningful when tab === "twilight". */
   sky?: TwilightSky;
+    /** The user's own free-text prompt — only meaningful (and required) when tab === "general". */
+  customPrompt?: string;
     status: JobStatus;
     /** Object URL of the ORIGINAL upload — used for the "before" view + download-original. */
   originalUrl: string;

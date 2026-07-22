@@ -17,9 +17,10 @@ interface ProcessBody {
     image?: unknown; // data URI of the downscaled image
   mode?: unknown; // "interior" | "exterior"
   note?: unknown; // optional user instruction
-  tab?: unknown; // "declutter" | "enhance" | "restage" | "twilight"
-  provider?: unknown; // "fal" | "openai" (only meaningful when tab === "enhance")
+  tab?: unknown; // "declutter" | "enhance" | "restage" | "twilight" | "general"
+  provider?: unknown; // "fal" | "openai" (only meaningful when tab === "enhance" or "general")
   sky?: unknown; // "orange" | "purple" (only meaningful when tab === "twilight")
+  customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
   width?: unknown; // original (pre-downscale) width, used by the OpenAI provider
   height?: unknown; // original (pre-downscale) height, used by the OpenAI provider
 }
@@ -51,9 +52,12 @@ export async function POST(req: NextRequest) {
                 ? "restage"
                 : body.tab === "twilight"
                     ? "twilight"
-                    : "declutter";
+                    : body.tab === "general"
+                        ? "general"
+                        : "declutter";
     const sky: TwilightSky = body.sky === "purple" ? "purple" : "orange";
     // Twilight is a Nano Banana (FAL) multi-image edit only — no OpenAI path.
+    // Prompt (general) can go either way, same as Enhance.
     const provider: Provider = tab === "twilight" ? "fal" : body.provider === "openai" ? "openai" : "fal";
     const width = typeof body.width === "number" ? body.width : undefined;
     const height = typeof body.height === "number" ? body.height : undefined;
@@ -73,7 +77,25 @@ export async function POST(req: NextRequest) {
           note = trimmed || undefined;
     }
 
-  const prompt = buildPrompt(tab, mode, note, provider);
+  let customPrompt: string | undefined;
+  if (tab === "general") {
+    if (typeof body.customPrompt !== "string" || !body.customPrompt.trim()) {
+      return NextResponse.json(
+        { error: "Enter a prompt before processing (Prompt tab requires one)." },
+        { status: 400 }
+      );
+    }
+    const trimmedPrompt = body.customPrompt.trim();
+    if (trimmedPrompt.length > 2000) {
+      return NextResponse.json(
+        { error: "Prompt is too long (max 2000 characters)." },
+        { status: 400 }
+      );
+    }
+    customPrompt = trimmedPrompt;
+  }
+
+  const prompt = buildPrompt(tab, mode, note, provider, customPrompt);
 
   // For every tab except Twilight, FAL/OpenAI receive just the one photo.
   // Twilight appends a second image: the absolute URL of the sky reference
