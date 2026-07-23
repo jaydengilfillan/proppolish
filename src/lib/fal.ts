@@ -18,9 +18,10 @@ export interface FalEditParams {
   prompt: string;
   /**
    * Input images, in order, as data URIs or absolute URLs. Element 0 is the
-   * photo being edited. Twilight jobs append a second element: the absolute
-   * URL of the sky reference image the user picked. Every other tab passes
-   * exactly one element.
+   * photo being edited. Twilight-exterior jobs append a second element: the
+   * absolute URL of the sky reference image the user picked (Twilight-interior
+   * jobs deliberately don't — see prompts.ts for why). Room Match appends the
+   * anchor's staged result. Every other job passes exactly one element.
    */
   imageUrls: string[];
   /** FAL resolution tier — "2K" or "4K". */

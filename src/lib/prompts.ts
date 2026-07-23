@@ -16,6 +16,25 @@ export type Tab = "declutter" | "enhance" | "restage" | "twilight" | "general";
 /** Which sky reference image Twilight jobs should be composited against. */
 export type TwilightSky = "orange" | "purple";
 
+/**
+ * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
+ * instead of sending the actual reference photo. Interior jobs kept picking up
+ * the reference image's orange/purple hue as a global colour grade across
+ * walls, ceilings and cabinetry no matter how firmly the prompt forbade it —
+ * a known failure mode of multi-image edit models blending palettes across
+ * all supplied images. Describing the sky in words instead removes that bias
+ * source entirely; only the small window/glass-door area needs to match it,
+ * so a description is precise enough and there's no second image to leak.
+ * Exterior jobs are unaffected — they still use the real reference image,
+ * since the whole point there IS to repaint the sky itself to match exactly.
+ */
+export const TWILIGHT_SKY_DESCRIPTIONS: Record<TwilightSky, string> = {
+  orange:
+    "a warm dusk sunset sky: deep orange and amber low near the horizon, softening up into a dusky blue-grey higher in the frame",
+  purple:
+    "a twilight sky with a soft blue-to-purple gradient: dusky blue near the horizon deepening into a gentle indigo-purple higher in the frame",
+};
+
 export const INTERIOR_PROMPT = `You are professionally editing a real estate listing photograph to make it clean, tidy and listing-ready.
 
 DO: Remove clutter and the occupant's movable personal belongings — laundry, towels, laundry baskets, dishes and clutter on benchtops/tables/floors, fridge stickers/magnets/notes, personal photos/posters/artwork on walls, stray/random chairs, rubbish bins, cords, toys, pet items — by masking and removing ONLY those specific clutter regions; everything else in the frame must be left pixel-for-pixel untouched. Make beds neat with clean, simple, neutral bedding. Tidy soft furnishings. Only correct exposure where an area is genuinely too dark or too bright, and straighten vertical lines only if clearly crooked. The result must look like a professional agency listing photo of the SAME room, not a re-coloured or re-toned one.
@@ -95,15 +114,13 @@ ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, do
 
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss.`;
 
-export const TWILIGHT_INTERIOR_PROMPT = `You are professionally converting a daytime interior real estate photograph into a realistic dusk/twilight scene, as if the same room were photographed at that same time of evening. A second reference image is provided.
+export const TWILIGHT_INTERIOR_PROMPT = `You are professionally converting a daytime interior real estate photograph into a realistic dusk/twilight scene, as if the same room were photographed at that same time of evening. No second reference image is provided for this job — the sky/window view is described in words below on purpose, so there is nothing external whose colour could leak onto the room's own surfaces.
 
-CRITICAL — READ THIS FIRST: the second reference image's ONLY function is to define the colour and shape of the sky/outside view that is visible THROUGH windows and glass doors. It is NOT a colour grade, NOT a filter, NOT a lighting gel, and NOT a mood reference for the rest of the photograph. Do not apply its orange/purple hue to the walls, ceiling, floor, cabinetry, benchtops or any other interior surface. Every interior surface must keep the exact same base colour it has in the original daytime photo.
+DO: Through any windows or glass doors, replace the visible outside sky/view with {{SKY_DESCRIPTION}}. That described colour belongs ONLY in that small window/glass area — nowhere else in the frame. Turn on interior lights that are physically already fitted to the room (ceiling lights, downlights, lamps, pendants) and dim the overall ambient exposure slightly so the room reads as photographed at dusk, not midday. Any warmth in the room must come ONLY from those real, existing light sources glowing at their own natural colour temperature (typically a soft neutral-to-warm white, like a real downlight or lamp) — small, localised pools of light immediately around each fixture are fine and expected. Keep the room's contents, furniture, layout and camera angle exactly the same.
 
-DO: Darken and replace the sky/outside view seen through windows or glass doors to match the twilight reference — this is the only place that colour should appear. Turn on interior lights that are physically already fitted to the room (ceiling lights, downlights, lamps, pendants) and dim the overall ambient exposure so the room reads as photographed at dusk, not midday. Any warmth in the room must come ONLY from those real, existing light sources glowing at their own natural colour temperature (typically a soft neutral-to-warm white, like a real downlight or lamp) — small, localised pools of light immediately around each fixture are fine and expected. Keep the room's contents, furniture, layout and camera angle exactly the same.
+WALLS, CEILING AND FLOOR MUST STAY THEIR TRUE DAYTIME COLOUR — THIS IS THE MOST IMPORTANT RULE, NOT OPTIONAL: if a wall, ceiling, cabinet or floor was white, off-white, cream or grey in the original photo, it MUST still read as that same neutral colour here, just dimmer and under artificial light instead of daylight. There must be NO overall orange, amber, peach, tan, honey, purple, pink or magenta cast washed across walls, ceilings, floors or cabinetry — not even a subtle one. Before finishing, check every large surface in the frame: does it still look like the same neutral material as the daytime original, just under warm little pools of lamp/downlight glow — or does the whole surface look tinted/dyed by a sunset colour? If it looks tinted or dyed anywhere, that is wrong — repaint it back to the original neutral colour. Only the direct, local glow immediately surrounding a lit fixture may shift warm; large flat expanses of wall, ceiling and floor away from any fixture must remain visibly neutral (white/off-white/cream/grey), the same as they were in the original photo, changed only by being dimmer.
 
-WALLS, CEILING AND FLOOR MUST STAY THEIR TRUE DAYTIME COLOUR — THIS IS CRITICAL, NOT OPTIONAL: if a wall, ceiling, cabinet or floor was white, off-white, cream or grey in the original photo, it MUST still read as that same neutral colour here, just dimmer and under artificial light instead of daylight. There must be NO overall orange, amber, peach, tan, honey, purple, pink or magenta cast washed across walls, ceilings, floors or cabinetry. Before finishing, check every large surface in the frame: does it still look like the same neutral material as the daytime original, just under warm little pools of lamp/downlight glow — or does the whole surface look tinted/dyed by the sunset colour? If it looks tinted or dyed, that is wrong — correct it back to the original neutral colour. Only the direct, local glow immediately surrounding a lit fixture may shift warm; large flat expanses of wall, ceiling and floor away from any fixture must remain visibly neutral (white/off-white/cream/grey), the same as they were in the original photo.
-
-ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture or object; change the camera angle, framing, composition, zoom or perspective; change the room's structure, walls, windows, doors, ceiling, floor, or any permanent feature; apply the sky reference's colour, or any orange/amber/purple/pink colour wash, to walls, ceilings, floors, cabinetry or benchtops. Preserve the room's true architecture, true wall/surface colours, layout and every permanent feature EXACTLY as photographed — only the view through windows/glass, the overall ambient exposure, and which fixtures are switched on may change.
+ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture or object; change the camera angle, framing, composition, zoom or perspective; change the room's structure, walls, windows, doors, ceiling, floor, or any permanent feature; apply the outside sky colour, or any orange/amber/purple/pink colour wash, to walls, ceilings, floors, cabinetry or benchtops. Preserve the room's true architecture, true wall/surface colours, layout and every permanent feature EXACTLY as photographed — only the view through windows/glass, the overall ambient exposure, and which fixtures are switched on may change.
 
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss, no colour wash over surfaces.`;
 
@@ -143,7 +160,8 @@ export function buildPrompt(
   note?: string,
   provider?: Provider,
   customPrompt?: string,
-  matchReference?: boolean
+  matchReference?: boolean,
+  sky?: TwilightSky
 ): string {
   let base: string;
   if (tab === "general") {
@@ -152,7 +170,14 @@ export function buildPrompt(
     // full control, so full responsibility for what it does to the photo.
     base = (customPrompt ?? "").trim();
   } else if (tab === "twilight") {
-    base = mode === "exterior" ? TWILIGHT_EXTERIOR_PROMPT : TWILIGHT_INTERIOR_PROMPT;
+    if (mode === "exterior") {
+      base = TWILIGHT_EXTERIOR_PROMPT;
+    } else {
+      base = TWILIGHT_INTERIOR_PROMPT.replace(
+        "{{SKY_DESCRIPTION}}",
+        TWILIGHT_SKY_DESCRIPTIONS[sky ?? "orange"]
+      );
+    }
   } else if (tab === "enhance") {
     base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;
   } else if (tab === "restage") {

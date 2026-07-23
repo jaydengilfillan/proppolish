@@ -117,14 +117,19 @@ export async function POST(req: NextRequest) {
     referenceImage = body.referenceImage;
   }
 
-  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage);
+  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky);
 
-  // For every tab except Twilight/Room-Match, FAL/OpenAI receive just the one
-  // photo. Twilight appends the absolute URL of the sky reference (FAL fetches
-  // images by URL — a relative path won't work). Room Match appends the
-  // anchor's already-staged result so this angle can be generated to match it.
+  // For every tab except Twilight-exterior/Room-Match, FAL/OpenAI receive
+  // just the one photo. Twilight-exterior appends the absolute URL of the sky
+  // reference (FAL fetches images by URL — a relative path won't work) since
+  // it needs to repaint the sky to match it exactly. Twilight-interior does
+  // NOT send the reference image — the walls kept picking up its orange/
+  // purple hue as a colour grade no matter what the prompt said, so interior
+  // jobs describe the sky in words instead (see TWILIGHT_SKY_DESCRIPTIONS)
+  // and only the actual photo is sent. Room Match appends the anchor's
+  // already-staged result so this angle can be generated to match it.
   const imageUrls: string[] = [body.image as string];
-  if (tab === "twilight") {
+  if (tab === "twilight" && mode === "exterior") {
     const skyPath = TWILIGHT_SKIES[sky];
     imageUrls.push(new URL(skyPath, req.nextUrl.origin).toString());
   }
