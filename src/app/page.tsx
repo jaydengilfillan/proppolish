@@ -369,12 +369,14 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Interior / Exterior selector — applies to every tab except Twilight
-          (which is always a front-of-house/pool hero shot, not a room). Set
-          BEFORE uploading so new jobs are queued with the right prompt from
-          the start (avoids paying twice: once for an auto-processed wrong
-          mode, then again on Retry after switching it). */}
-      {view === "process" && activeTab !== "twilight" && activeTab !== "general" && (
+      {/* Interior / Exterior selector — applies to every tab except Prompt
+          (which sends the user's own text with no template). Twilight needs
+          this too now: interior dusk shots use a different prompt to
+          exterior ones (interior must keep true wall colour, exterior
+          repaints the sky). Set BEFORE uploading so new jobs are queued with
+          the right prompt from the start (avoids paying twice: once for an
+          auto-processed wrong mode, then again on Retry after switching it). */}
+      {view === "process" && activeTab !== "general" && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -461,9 +463,11 @@ export default function Home() {
             </div>
           )}
 
-          {/* Twilight tab: sky reference picker. Default is the orange sunset;
-              this only decides which reference image gets sent alongside the
-              photo — it does not change the prompt itself. */}
+          {/* Twilight tab: sky reference picker. Default is the orange sunset.
+              For exterior shots this decides which reference image is sent
+              alongside the photo; for interior shots it also informs the
+              colour of light through the windows, but the room's own walls
+              stay their true colour regardless of which sky is picked. */}
           {activeTab === "twilight" && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Sky:</span>

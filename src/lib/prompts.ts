@@ -77,19 +77,33 @@ ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions
 Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
 
 /**
- * "Twilight" tab prompt — Nano Banana (FAL) only, multi-image edit. Converts a
- * daytime front-of-house or pool/back-entertaining hero shot into a dusk shot.
- * A second image (the sky reference the user picked) is sent alongside the
- * photo; this prompt tells the model how to use it. Same hard DO-NOT pattern
- * as the rest of this file — no new fixtures, nothing moved, camera locked.
+ * "Twilight" tab prompts — Nano Banana (FAL) only, multi-image edit. Converts a
+ * daytime shot into a dusk shot. A second image (the sky reference the user
+ * picked) is sent alongside the photo; these prompts tell the model how to use
+ * it. Same hard DO-NOT pattern as the rest of this file — no new fixtures,
+ * nothing moved, camera locked. Split interior/exterior because an interior
+ * shot has no direct sky to repaint — the sky reference should only inform
+ * what's visible through windows and the colour of ambient light, and the
+ * walls/surfaces themselves must stay their true painted colour (not tinted
+ * orange/purple by the sky), same guardrail pattern as the Enhance prompts.
  */
-export const TWILIGHT_PROMPT = `You are professionally converting a daytime real estate photograph (front-of-house or pool/back-entertaining hero shot) into a realistic night twilight scene. A second reference image is provided showing the exact sky — colour, gradient and cloud pattern — to use.
+export const TWILIGHT_EXTERIOR_PROMPT = `You are professionally converting a daytime real estate photograph (front-of-house or pool/back-entertaining hero shot) into a realistic night twilight scene. A second reference image is provided showing the exact sky — colour, gradient and cloud pattern — to use.
 
 DO: Transform this daytime shot into a realistic night twilight scene. Set the sky to the sky shown in the second reference image. Turn on all visible exterior lighting that is physically already fitted to the building — window lights, downlights, wall sconces, path/step lights, eave lights — so it reads as switched on at dusk, but do not add any lighting that isn't already there. Keep the house, landscaping, and camera angle exactly the same. Maintain a natural, balanced lighting between the sky and the lit building. If a pool is visible, illuminate the pool water a natural light blue. Cinematic, high-end real estate twilight look — photorealistic, no stylisation.
 
 ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight, string light or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture, landscaping, vehicle, person or object; change the camera angle, framing, composition, zoom or perspective; change the building's structure, walls, windows, doors, roofline, or any permanent feature; alter neighbouring buildings, fences, power lines or structures. Preserve the property's true architecture, layout and every permanent feature EXACTLY as photographed — only the sky and the ambient/exterior lighting may change.
 
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss.`;
+
+export const TWILIGHT_INTERIOR_PROMPT = `You are professionally converting a daytime interior real estate photograph into a realistic dusk/twilight scene, as if the same room were photographed at that same time of evening. A second reference image is provided showing the twilight sky's colour and mood — use it ONLY to inform what's visible through any windows and the colour temperature of the outside light spilling in, not to recolour the room itself.
+
+DO: Darken the sky/outside view seen through any windows or glass doors to match the twilight reference. Turn on all interior lights that are physically already fitted to the room — ceiling lights, lamps, downlights, pendant lights — so the room reads as lit at dusk. It is correct and expected for the room to look warmer and more atmospheric than the flat daytime original, purely from that lighting change. Keep the room's contents, furniture, layout and camera angle exactly the same.
+
+WALLS AND SURFACES MUST STAY THEIR TRUE COLOUR — THIS IS CRITICAL: walls, ceilings and any other neutral surface (white, off-white, cream, grey) MUST still read as that same true neutral colour in the result, just under warmer/dimmer light. Do NOT paint, wash, tint or recolour the walls themselves with the sunset/twilight sky colour (no orange, amber, purple, pink or magenta cast baked into the wall paint). A wall that was white before must still look white after — lit warmly by lamps and dusk light, not dyed orange. Only small, localised, physically-plausible light pooling directly under/near a lit fixture or window (a soft warm glow on the wall right next to a lamp, for example) is acceptable — the wall as a whole must remain neutral.
+
+ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture or object; change the camera angle, framing, composition, zoom or perspective; change the room's structure, walls, windows, doors, ceiling, floor, or any permanent feature; recolour or tint walls, ceilings or other neutral surfaces to match the sky reference. Preserve the room's true architecture, true wall/surface colours, layout and every permanent feature EXACTLY as photographed — only the view through windows, the ambient light levels/warmth, and which fixtures are switched on may change.
+
+Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss, no colour wash over surfaces.`;
 
 /**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
@@ -136,7 +150,7 @@ export function buildPrompt(
     // full control, so full responsibility for what it does to the photo.
     base = (customPrompt ?? "").trim();
   } else if (tab === "twilight") {
-    base = TWILIGHT_PROMPT;
+    base = mode === "exterior" ? TWILIGHT_EXTERIOR_PROMPT : TWILIGHT_INTERIOR_PROMPT;
   } else if (tab === "enhance") {
     base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;
   } else if (tab === "restage") {
