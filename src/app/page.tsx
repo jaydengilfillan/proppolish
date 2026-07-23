@@ -288,8 +288,8 @@ export default function Home() {
         if (!j.resultUrl) continue;
         const blob = await urlToBlob(j.resultUrl);
         const buf = new Uint8Array(await blob.arrayBuffer());
-        let name = zipName(j.fileName);
-        let n = 1;
+        let n = 2;
+        let name = zipName(j.fileName, n);
         while (used.has(name)) name = zipName(j.fileName, ++n);
         used.add(name);
         entries.push({ name, data: buf });
@@ -649,9 +649,10 @@ export default function Home() {
   );
 }
 
-function zipName(original: string, n = 1): string {
+function zipName(original: string, n = 2): string {
   const dot = original.lastIndexOf(".");
   const stem = dot > 0 ? original.slice(0, dot) : original;
-  const suffix = n > 1 ? `-${n}` : "";
-  return `${stem}-polished${suffix}.jpg`;
+  // ".2" reads as "version 2" of the same file. If a batch somehow contains
+  // two photos with the same original name, later ones bump to .3, .4, etc.
+  return `${stem}.${n}.jpg`;
 }

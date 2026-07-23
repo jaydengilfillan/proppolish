@@ -169,5 +169,7 @@ export default function JobCard({ job, onRetry }: Props) {
 function downloadName(original: string): string {
   const dot = original.lastIndexOf(".");
   const stem = dot > 0 ? original.slice(0, dot) : original;
-  return `${stem}-polished.jpg`;
+  // ".2" reads as "version 2" of the same file — easier to match up against
+  // the original on the user's end than a "-polished" suffix.
+  return `${stem}.2.jpg`;
 }
