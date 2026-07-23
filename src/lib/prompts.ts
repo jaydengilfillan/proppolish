@@ -17,6 +17,18 @@ export type Tab = "declutter" | "enhance" | "restage" | "twilight" | "general";
 export type TwilightSky = "orange" | "purple";
 
 /**
+ * Interior Twilight has two looks:
+ * - "natural": walls/ceiling/floor stay their true daytime neutral colour,
+ *   only lit fixtures glow warm and the window view goes dusk. Closer to a
+ *   literal "same room, lights on, sun down" result.
+ * - "golden": an intentionally warm, cinematic "golden hour" ambient glow is
+ *   allowed to wash gently across the whole room, not just near fixtures —
+ *   this is the look the app owner actually preferred after testing, and is
+ *   now an explicit deliberate style rather than an unwanted colour leak.
+ */
+export type TwilightStyle = "natural" | "golden";
+
+/**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
  * instead of sending the actual reference photo. Interior jobs kept picking up
  * the reference image's orange/purple hue as a global colour grade across
@@ -30,9 +42,9 @@ export type TwilightSky = "orange" | "purple";
  */
 export const TWILIGHT_SKY_DESCRIPTIONS: Record<TwilightSky, string> = {
   orange:
-    "a warm dusk sunset sky: deep orange and amber low near the horizon, softening up into a dusky blue-grey higher in the frame",
+    "a rich dusk sky that is mostly a deep, cool blue across the upper sky, softening down through a dusty blue-grey and then a pale blush pink lower down, with only a narrow warm orange-peach glow right along the horizon line where the sun has just set — most of the sky is cool blue, the warm colour is a thin band right at the horizon, not the whole sky",
   purple:
-    "a twilight sky with a soft blue-to-purple gradient: dusky blue near the horizon deepening into a gentle indigo-purple higher in the frame",
+    "a moody twilight sky that is mostly a deep indigo-purple across the upper sky, softening down through a dusty mauve-pink lower down, with only a narrow warm golden-peach glow right along the horizon line where the sun has just set — most of the sky is cool indigo-purple, the warm colour is a thin band right at the horizon, not the whole sky",
 };
 
 export const INTERIOR_PROMPT = `You are professionally editing a real estate listing photograph to make it clean, tidy and listing-ready.
@@ -96,15 +108,18 @@ ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions
 Produce a crisp, photorealistic luxury real estate image: natural textures, accurate shadows, realistic scale, clean colour balance, sharp detail, and a polished, HDR-quality finish. No AI haze, softness, warped furniture, distorted lines, duplicated objects, or changes to the original camera framing.`;
 
 /**
- * "Twilight" tab prompts — Nano Banana (FAL) only, multi-image edit. Converts a
- * daytime shot into a dusk shot. A second image (the sky reference the user
- * picked) is sent alongside the photo; these prompts tell the model how to use
- * it. Same hard DO-NOT pattern as the rest of this file — no new fixtures,
- * nothing moved, camera locked. Split interior/exterior because an interior
- * shot has no direct sky to repaint — the sky reference should only inform
- * what's visible through windows and the colour of ambient light, and the
- * walls/surfaces themselves must stay their true painted colour (not tinted
- * orange/purple by the sky), same guardrail pattern as the Enhance prompts.
+ * "Twilight" tab prompts — Nano Banana (FAL) only. Converts a daytime shot
+ * into a dusk shot. Same hard DO-NOT pattern as the rest of this file — no
+ * new fixtures, nothing moved, camera locked. Split interior/exterior because
+ * an interior shot has no direct sky to repaint. Exterior sends the actual
+ * sky reference image (a second input image) since repainting the sky to
+ * match it exactly is the whole point there. Interior does NOT send that
+ * image — the walls kept picking up its colour as a global grade regardless
+ * of instructions, a known failure mode of multi-image blending — so interior
+ * jobs describe the sky in words instead (TWILIGHT_SKY_DESCRIPTIONS) and pick
+ * one of two interior styles: "natural" (walls stay true daytime colour) or
+ * "golden" (a deliberate warm golden-hour glow across the room, which is what
+ * the app owner actually preferred after side-by-side testing).
  */
 export const TWILIGHT_EXTERIOR_PROMPT = `You are professionally converting a daytime real estate photograph (front-of-house or pool/back-entertaining hero shot) into a realistic night twilight scene. A second reference image is provided showing the exact sky — colour, gradient and cloud pattern — to use.
 
@@ -123,6 +138,16 @@ WALLS, CEILING AND FLOOR MUST STAY THEIR TRUE DAYTIME COLOUR — THIS IS THE MOS
 ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture or object; change the camera angle, framing, composition, zoom or perspective; change the room's structure, walls, windows, doors, ceiling, floor, or any permanent feature; apply the outside sky colour, or any orange/amber/purple/pink colour wash, to walls, ceilings, floors, cabinetry or benchtops. Preserve the room's true architecture, true wall/surface colours, layout and every permanent feature EXACTLY as photographed — only the view through windows/glass, the overall ambient exposure, and which fixtures are switched on may change.
 
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss, no colour wash over surfaces.`;
+
+export const TWILIGHT_INTERIOR_GOLDEN_PROMPT = `You are professionally converting a daytime interior real estate photograph into a warm, cinematic "golden hour dusk" scene, as if the same room were photographed right at that magic-hour moment in the evening. No second reference image is provided for this job — the sky/window view is described in words below on purpose.
+
+DO: Through any windows or glass doors, replace the visible outside sky/view with {{SKY_DESCRIPTION}}. Turn on interior lights that are physically already fitted to the room (ceiling lights, downlights, lamps, pendants) and dim the overall ambient exposure so the room reads as photographed at dusk, not midday. This style is deliberately warm and golden: let a soft, gentle golden-hour glow settle across the room as a whole — walls, ceiling and floor may take on a warm honey/golden cast from the low warm light and the glow of the room's own fixtures, in addition to brighter pools directly around each lamp/downlight. Keep the room's contents, furniture, layout and camera angle exactly the same.
+
+KEEP IT TASTEFUL, NOT A FILTER: the golden warmth should look like real warm light filling the room, not a flat colour overlay pasted on top of the image. Surfaces should still show their true material and form — timber still looks like timber, upholstery still looks like fabric — just bathed in soft golden light. Avoid pushing it into a heavy, saturated, artificial orange; this should read as an inviting, premium "golden hour" real estate photo, not a fantasy or a colour-filter effect. Do not let colours clip or go neon — keep shadows and highlights natural and believable.
+
+ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, downlight or illuminated feature that is not physically present in the original photograph; add, remove, duplicate or move any furniture or object; change the camera angle, framing, composition, zoom or perspective; change the room's structure, walls, windows, doors, ceiling, floor, or any permanent feature. Preserve the room's true architecture, layout and every permanent feature EXACTLY as photographed — only the view through windows/glass, the overall ambient exposure/warmth, and which fixtures are switched on may change.
+
+Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss.`;
 
 /**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
@@ -161,7 +186,8 @@ export function buildPrompt(
   provider?: Provider,
   customPrompt?: string,
   matchReference?: boolean,
-  sky?: TwilightSky
+  sky?: TwilightSky,
+  style?: TwilightStyle
 ): string {
   let base: string;
   if (tab === "general") {
@@ -173,10 +199,8 @@ export function buildPrompt(
     if (mode === "exterior") {
       base = TWILIGHT_EXTERIOR_PROMPT;
     } else {
-      base = TWILIGHT_INTERIOR_PROMPT.replace(
-        "{{SKY_DESCRIPTION}}",
-        TWILIGHT_SKY_DESCRIPTIONS[sky ?? "orange"]
-      );
+      const template = style === "golden" ? TWILIGHT_INTERIOR_GOLDEN_PROMPT : TWILIGHT_INTERIOR_PROMPT;
+      base = template.replace("{{SKY_DESCRIPTION}}", TWILIGHT_SKY_DESCRIPTIONS[sky ?? "orange"]);
     }
   } else if (tab === "enhance") {
     base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;

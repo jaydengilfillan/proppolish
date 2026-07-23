@@ -1,4 +1,4 @@
-import type { Mode, Tab, TwilightSky } from "./prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle } from "./prompts";
 import type { Provider } from "./config";
 
 export type JobStatus = "queued" | "processing" | "done" | "error";
@@ -13,6 +13,8 @@ export interface Job {
   provider?: Provider;
     /** Which sky reference to composite against — only meaningful when tab === "twilight". */
   sky?: TwilightSky;
+    /** Interior look — "natural" (true wall colour) or "golden" (warm ambient glow). Only meaningful when tab === "twilight" && mode === "interior". */
+  style?: TwilightStyle;
     /** The user's own free-text prompt — only meaningful (and required) when tab === "general". */
   customPrompt?: string;
     status: JobStatus;

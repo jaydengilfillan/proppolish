@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
-import type { Mode, Tab, TwilightSky } from "@/lib/prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle } from "@/lib/prompts";
 import {
   ACCEPTED_TYPES,
   APP_NAME,
@@ -36,6 +36,11 @@ const SKY_LABEL: Record<TwilightSky, string> = {
   purple: "Purple twilight",
 };
 
+const STYLE_LABEL: Record<TwilightStyle, string> = {
+  natural: "Natural",
+  golden: "Golden",
+};
+
 const MODE_LABEL: Record<Mode, string> = {
   interior: "Interior",
   exterior: "Exterior / Aerial",
@@ -59,6 +64,7 @@ export default function Home() {
   const [activeMode, setActiveMode] = useState<Mode>("interior");
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
   const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
+  const [twilightStyle, setTwilightStyle] = useState<TwilightStyle>("natural");
   const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
   const [generalPrompt, setGeneralPrompt] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -85,6 +91,7 @@ export default function Home() {
         | "tab"
         | "provider"
         | "sky"
+        | "style"
         | "customPrompt"
         | "width"
         | "height"
@@ -105,6 +112,7 @@ export default function Home() {
             tab: source.tab,
             provider: source.provider,
             sky: source.sky,
+            style: source.style,
             customPrompt: source.customPrompt,
             width: source.width,
             height: source.height,
@@ -140,6 +148,7 @@ export default function Home() {
             tab: job.tab,
             provider: job.provider,
             sky: job.sky,
+            style: job.style,
             customPrompt: job.customPrompt,
             width: job.width,
             height: job.height,
@@ -184,6 +193,7 @@ export default function Home() {
             tab,
             provider,
             sky: tab === "twilight" ? twilightSky : undefined,
+            style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "queued",
             originalUrl,
@@ -199,6 +209,7 @@ export default function Home() {
             tab,
             provider,
             sky: tab === "twilight" ? twilightSky : undefined,
+            style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "error",
             originalUrl,
@@ -220,7 +231,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, generalProvider, generalPrompt]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, generalProvider, generalPrompt]
   );
 
   const onDrop = useCallback(
@@ -465,9 +476,9 @@ export default function Home() {
 
           {/* Twilight tab: sky reference picker. Default is the orange sunset.
               For exterior shots this decides which reference image is sent
-              alongside the photo; for interior shots it also informs the
-              colour of light through the windows, but the room's own walls
-              stay their true colour regardless of which sky is picked. */}
+              alongside the photo; for interior shots it only informs the
+              wording used to describe the window view (no image is sent for
+              interior — see prompts.ts). */}
           {activeTab === "twilight" && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Sky:</span>
@@ -483,6 +494,31 @@ export default function Home() {
                     }`}
                   >
                     {SKY_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Twilight interior only: Natural keeps walls at their true
+              daytime colour (only fixtures glow warm). Golden allows a
+              deliberate warm golden-hour glow across the whole room — this
+              is the look picked after testing, not a bug being tolerated. */}
+          {activeTab === "twilight" && activeMode === "interior" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Look:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                {(Object.keys(STYLE_LABEL) as TwilightStyle[]).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => setTwilightStyle(st)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      twilightStyle === st
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    {STYLE_LABEL[st]}
                   </button>
                 ))}
               </div>
