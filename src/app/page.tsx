@@ -18,6 +18,7 @@ import JobCard from "@/components/JobCard";
 import HdrBlend from "@/components/HdrBlend";
 import RoomMatch from "@/components/RoomMatch";
 import FloorPlan from "@/components/FloorPlan";
+import Notes from "@/components/Notes";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -54,8 +55,11 @@ const MODE_LABEL: Record<Mode, string> = {
  * consistently instead of independently. Self-contained, like "hdr".
  * "floorplan" = Floor Plan builder: hand-drawn shapes + typed labels,
  * rendered into a branded template. Zero AI calls, entirely client-side.
+ * "notes" = saved prompt-snippet library (localStorage only, no AI calls),
+ * tucked in the header's top-right corner since it's a utility, not a tab
+ * in the main Declutter/Enhance/.../Prompt workflow.
  */
-type View = "process" | "hdr" | "match" | "floorplan";
+type View = "process" | "hdr" | "match" | "floorplan" | "notes";
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -314,6 +318,12 @@ export default function Home() {
     [addFiles]
   );
 
+  const handleUseNotePrompt = useCallback((text: string) => {
+    setGeneralPrompt(text);
+    setActiveTab("general");
+    setView("process");
+  }, []);
+
   const costHint =
     (activeTab === "enhance" && enhanceProvider === "openai") ||
     (activeTab === "general" && generalProvider === "openai")
@@ -325,9 +335,21 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       {/* Header */}
-      <header className="mb-6 flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
-        <p className="text-sm text-neutral-500">{APP_TAGLINE}</p>
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
+          <p className="text-sm text-neutral-500">{APP_TAGLINE}</p>
+        </div>
+        <button
+          onClick={() => setView("notes")}
+          className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+            view === "notes"
+              ? "bg-neutral-900 text-white"
+              : "border border-neutral-300 text-neutral-500 hover:text-neutral-800"
+          }`}
+        >
+          Notes
+        </button>
       </header>
 
       {/* Tab bar */}
@@ -414,6 +436,8 @@ export default function Home() {
         <RoomMatch />
       ) : view === "floorplan" ? (
         <FloorPlan />
+      ) : view === "notes" ? (
+        <Notes onUseInPrompt={handleUseNotePrompt} />
       ) : (
         <>
           {/* Enhance / Prompt tabs: model selector. Each tab remembers its
