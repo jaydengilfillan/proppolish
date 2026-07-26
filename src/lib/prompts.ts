@@ -24,6 +24,16 @@ export type Tab = "declutter" | "enhance" | "restage" | "twilight" | "general";
  */
 export type DeclutterIntensity = "light" | "heavy";
 
+/**
+ * Enhance has two types:
+ * - "standard": the original lighting/finishing pass, split by Interior/
+ *   Exterior mode as before.
+ * - "night": a restoration pass for blurry night-time drone/aerial shots —
+ *   recovers detail, kills motion blur/noise/haze. Always exterior/aerial by
+ *   nature, so it doesn't use the Interior/Exterior mode at all.
+ */
+export type EnhanceType = "standard" | "night";
+
 /** Which sky reference image Twilight jobs should be composited against. */
 export type TwilightSky = "orange" | "purple";
 
@@ -107,6 +117,23 @@ export const ENHANCE_EXTERIOR_PROMPT = `You are professionally finishing an exte
 DO: Fix patchy, dead, brown or overgrown lawn so it looks evenly green, healthy and freshly mowed; correct exposure, white balance and colour to a bright, natural, professional grade through LIGHT, not through a colour wash over surfaces; make greenery, garden beds and hard surfaces look clean, vibrant and well maintained; sharpen subtly. Most skies are already fine as photographed and should be left alone — only if the sky is genuinely washed out, hazy or flat should you deepen it, and even then only a small, subtle nudge back toward natural, never a strong or dramatic push. Render/painted walls, trim and any other neutral-coloured surface (white, off-white, cream, grey) MUST read as that same true neutral colour in the result — do not let white or off-white walls, render or trim shift towards pink, magenta, purple, orange or yellow. If a wall was white before, it must still look white after, just better lit. Only remove something if it is an obvious piece of visible mess directly in frame; do not go looking for clutter to remove.
 
 ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky's content or change the weather/time of day; saturate or deepen the sky beyond a small, subtle correction on a genuinely washed-out sky — never produce an intensely saturated, vivid, or artificial-looking blue; a sky that was already a normal, natural blue must be left as it was, not made richer; remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there; apply a colour tint, wash or cast to walls, render, trim or other neutral surfaces — no pink, magenta, purple, orange or yellow tinge on anything that was originally white, off-white or grey. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only.`;
+
+/**
+ * "Enhance" tab, "Night" type — a restoration pass for blurry night-time
+ * drone/aerial shots (common cause: drone drift during a long night
+ * exposure). Different job to the standard Enhance prompts above: this is
+ * about recovering detail and killing blur/noise, not colour grading or
+ * lawn touch-ups. Always exterior/aerial by nature, so it ignores the
+ * Interior/Exterior mode entirely. Adapted from a prompt the app owner
+ * already uses and has tested against real drone shots.
+ */
+export const ENHANCE_NIGHT_PROMPT = `You are professionally enhancing and restoring a blurry night-time drone/aerial real estate photograph. This is a restoration and sharpening pass — recovering detail that's genuinely there but soft/noisy, not a redesign or relighting pass. Preserve the EXACT original camera angle, perspective, framing, composition and physical layout — do not re-compose, re-frame, or change the viewpoint.
+
+DO: Carefully recover natural detail and edge definition across the entire scene — buildings, windows, roads, landscaping and the skyline. Reduce motion blur, softness, digital noise, colour banding, compression artefacts and atmospheric haze, while maintaining realistic night-time lighting. Improve clarity and dynamic range. Keep building textures realistic, window lights controlled and highlights properly exposed. Maintain natural shadows and believable night colours. Preserve all existing signage, lettering, logos and branding exactly as photographed — do not regenerate, reinterpret, misspell, oversharpen or replace any text.
+
+ABSOLUTELY DO NOT (this is a legal requirement): alter, redesign, move, remove or add any building, window, balcony, road, structure, light or landscape feature; change the property boundaries or footprint; replace the sky or change the time of night; remove, add or alter any neighbouring building, road, power line or structure; misrepresent, regenerate or alter any signage, lettering, logo or branding. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint.
+
+Improve clarity and dynamic range without creating harsh artificial sharpening, halos, glowing edges, oversaturated colours, or an AI-generated appearance. The final result should look like a genuinely sharp photograph captured with a high-quality professional drone camera at night — not a digitally rebuilt or AI-generated image.`;
 
 /**
  * "Restage" tab prompts — Nano Banana (FAL) only, no OpenAI option in the UI.
@@ -220,7 +247,8 @@ export function buildPrompt(
   matchReference?: boolean,
   sky?: TwilightSky,
   style?: TwilightStyle,
-  intensity?: DeclutterIntensity
+  intensity?: DeclutterIntensity,
+  enhanceType?: EnhanceType
 ): string {
   let base: string;
   if (tab === "general") {
@@ -236,7 +264,12 @@ export function buildPrompt(
       base = template.replace("{{SKY_DESCRIPTION}}", TWILIGHT_SKY_DESCRIPTIONS[sky ?? "orange"]);
     }
   } else if (tab === "enhance") {
-    base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;
+    base =
+      enhanceType === "night"
+        ? ENHANCE_NIGHT_PROMPT
+        : mode === "exterior"
+          ? ENHANCE_EXTERIOR_PROMPT
+          : ENHANCE_INTERIOR_PROMPT;
   } else if (tab === "restage") {
     base = mode === "exterior" ? RESTAGE_EXTERIOR_PROMPT : RESTAGE_INTERIOR_PROMPT;
   } else if (intensity === "light") {
@@ -245,7 +278,7 @@ export function buildPrompt(
     base = mode === "exterior" ? EXTERIOR_PROMPT : INTERIOR_PROMPT;
   }
 
-  if (tab === "enhance" && mode === "exterior" && provider === "openai") {
+  if (tab === "enhance" && enhanceType !== "night" && mode === "exterior" && provider === "openai") {
     base = base + "\n\n" + OPENAI_EXTERIOR_TEXTURE_INSTRUCTION;
   }
 

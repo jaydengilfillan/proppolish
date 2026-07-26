@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
-import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity } from "@/lib/prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import {
   ACCEPTED_TYPES,
   APP_NAME,
@@ -47,6 +47,11 @@ const INTENSITY_LABEL: Record<DeclutterIntensity, string> = {
   heavy: "Heavy",
 };
 
+const ENHANCE_TYPE_LABEL: Record<EnhanceType, string> = {
+  standard: "Standard",
+  night: "Night (drone)",
+};
+
 const MODE_LABEL: Record<Mode, string> = {
   interior: "Interior",
   exterior: "Exterior / Aerial",
@@ -75,6 +80,7 @@ export default function Home() {
   const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
   const [twilightStyle, setTwilightStyle] = useState<TwilightStyle>("natural");
   const [declutterIntensity, setDeclutterIntensity] = useState<DeclutterIntensity>("heavy");
+  const [enhanceType, setEnhanceType] = useState<EnhanceType>("standard");
   const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
   const [generalPrompt, setGeneralPrompt] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -103,6 +109,7 @@ export default function Home() {
         | "sky"
         | "style"
         | "intensity"
+        | "enhanceType"
         | "customPrompt"
         | "width"
         | "height"
@@ -125,6 +132,7 @@ export default function Home() {
             sky: source.sky,
             style: source.style,
             intensity: source.intensity,
+            enhanceType: source.enhanceType,
             customPrompt: source.customPrompt,
             width: source.width,
             height: source.height,
@@ -162,6 +170,7 @@ export default function Home() {
             sky: job.sky,
             style: job.style,
             intensity: job.intensity,
+            enhanceType: job.enhanceType,
             customPrompt: job.customPrompt,
             width: job.width,
             height: job.height,
@@ -178,7 +187,11 @@ export default function Home() {
   const addFiles = useCallback(
     async (fileList: FileList | File[], overrideTab?: Tab, overrideMode?: Mode) => {
       const tab = overrideTab ?? activeTab;
-      const mode = overrideMode ?? activeMode;
+      // Night (drone) Enhance jobs are always exterior/aerial by nature — the
+      // prompt itself ignores mode, but keep the Job's own mode field honest
+      // rather than leaving it as whatever Interior/Exterior was last picked.
+      const mode =
+        tab === "enhance" && enhanceType === "night" ? "exterior" : overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
         (ACCEPTED_TYPES as readonly string[]).includes(f.type)
       );
@@ -208,6 +221,7 @@ export default function Home() {
             sky: tab === "twilight" ? twilightSky : undefined,
             style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
             intensity: tab === "declutter" ? declutterIntensity : undefined,
+            enhanceType: tab === "enhance" ? enhanceType : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "queued",
             originalUrl,
@@ -225,6 +239,7 @@ export default function Home() {
             sky: tab === "twilight" ? twilightSky : undefined,
             style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
             intensity: tab === "declutter" ? declutterIntensity : undefined,
+            enhanceType: tab === "enhance" ? enhanceType : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "error",
             originalUrl,
@@ -246,7 +261,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, declutterIntensity, generalProvider, generalPrompt]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, declutterIntensity, enhanceType, generalProvider, generalPrompt]
   );
 
   const onDrop = useCallback(
@@ -420,7 +435,9 @@ export default function Home() {
           repaints the sky). Set BEFORE uploading so new jobs are queued with
           the right prompt from the start (avoids paying twice: once for an
           auto-processed wrong mode, then again on Retry after switching it). */}
-      {view === "process" && activeTab !== "general" && (
+      {view === "process" &&
+        activeTab !== "general" &&
+        !(activeTab === "enhance" && enhanceType === "night") && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -451,6 +468,31 @@ export default function Home() {
         <Notes onUseInPrompt={handleUseNotePrompt} />
       ) : (
         <>
+          {/* Enhance tab: type selector. Standard is the usual mode-based
+              lighting/finishing pass. Night is a restoration pass for blurry
+              night-time drone/aerial shots — it doesn't use the Interior/
+              Exterior mode at all (a drone shot is always exterior). */}
+          {activeTab === "enhance" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Type:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                {(Object.keys(ENHANCE_TYPE_LABEL) as EnhanceType[]).map((et) => (
+                  <button
+                    key={et}
+                    onClick={() => setEnhanceType(et)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      enhanceType === et
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    {ENHANCE_TYPE_LABEL[et]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Enhance / Prompt tabs: model selector. Each tab remembers its
               own last-picked provider (enhanceProvider vs generalProvider)
               rather than sharing one, so switching tabs doesn't surprise you. */}
