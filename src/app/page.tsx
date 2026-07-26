@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
 import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import {
@@ -81,6 +81,7 @@ export default function Home() {
   const [twilightStyle, setTwilightStyle] = useState<TwilightStyle>("natural");
   const [declutterIntensity, setDeclutterIntensity] = useState<DeclutterIntensity>("heavy");
   const [enhanceType, setEnhanceType] = useState<EnhanceType>("standard");
+  const [username, setUsername] = useState<string | null>(null);
   const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
   const [generalPrompt, setGeneralPrompt] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -356,6 +357,24 @@ export default function Home() {
     setView("process");
   }, []);
 
+  // Who's signed in, purely for display — actual enforcement happens
+  // server-side in middleware.ts, this is just so the header can show
+  // "Signed in as X" and offer a logout button.
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { username?: string } | null) => setUsername(d?.username ?? null))
+      .catch(() => setUsername(null));
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch("/api/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
+  }, []);
+
   const costHint =
     (activeTab === "enhance" && enhanceProvider === "openai") ||
     (activeTab === "general" && generalProvider === "openai")
@@ -372,16 +391,29 @@ export default function Home() {
           <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME}</h1>
           <p className="text-sm text-neutral-500">{APP_TAGLINE}</p>
         </div>
-        <button
-          onClick={() => setView("notes")}
-          className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-            view === "notes"
-              ? "bg-neutral-900 text-white"
-              : "border border-neutral-300 text-neutral-500 hover:text-neutral-800"
-          }`}
-        >
-          Notes
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {username && (
+            <span className="hidden text-xs text-neutral-400 sm:inline">
+              Signed in as {username}
+            </span>
+          )}
+          <button
+            onClick={handleLogout}
+            className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-800"
+          >
+            Log out
+          </button>
+          <button
+            onClick={() => setView("notes")}
+            className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              view === "notes"
+                ? "bg-neutral-900 text-white"
+                : "border border-neutral-300 text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            Notes
+          </button>
+        </div>
       </header>
 
       {/* Tab bar */}
