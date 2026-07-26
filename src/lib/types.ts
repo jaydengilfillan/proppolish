@@ -1,4 +1,4 @@
-import type { Mode, Tab, TwilightSky, TwilightStyle } from "./prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity } from "./prompts";
 import type { Provider } from "./config";
 
 export type JobStatus = "queued" | "processing" | "done" | "error";
@@ -15,6 +15,8 @@ export interface Job {
   sky?: TwilightSky;
     /** Interior look — "natural" (true wall colour) or "golden" (warm ambient glow). Only meaningful when tab === "twilight" && mode === "interior". */
   style?: TwilightStyle;
+    /** Light (small tidy-up) vs heavy (full declutter) — only meaningful when tab === "declutter". */
+  intensity?: DeclutterIntensity;
     /** The user's own free-text prompt — only meaningful (and required) when tab === "general". */
   customPrompt?: string;
     status: JobStatus;

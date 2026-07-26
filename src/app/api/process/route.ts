@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError } from "@/lib/fal";
 import { openaiEdit, OpenAIImageError } from "@/lib/openai";
-import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle } from "@/lib/prompts";
+import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity } from "@/lib/prompts";
 import { resolutionTier, Provider, TWILIGHT_SKIES } from "@/lib/config";
 
 // This route calls the model provider synchronously. FAL is usually fast
@@ -21,6 +21,7 @@ interface ProcessBody {
   provider?: unknown; // "fal" | "openai" (only meaningful when tab === "enhance" or "general")
   sky?: unknown; // "orange" | "purple" (only meaningful when tab === "twilight")
   style?: unknown; // "natural" | "golden" (only meaningful when tab === "twilight" && mode === "interior")
+  intensity?: unknown; // "light" | "heavy" (only meaningful when tab === "declutter")
   customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
   referenceImage?: unknown; // Room Match: URL/data URI of the anchor's staged result, only meaningful when tab === "restage"
   width?: unknown; // original (pre-downscale) width, used by the OpenAI provider
@@ -66,6 +67,7 @@ export async function POST(req: NextRequest) {
                         : "declutter";
     const sky: TwilightSky = body.sky === "purple" ? "purple" : "orange";
     const style: TwilightStyle = body.style === "golden" ? "golden" : "natural";
+    const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     // Twilight is a Nano Banana (FAL) multi-image edit only — no OpenAI path.
     // Prompt (general) can go either way, same as Enhance.
     const provider: Provider = tab === "twilight" ? "fal" : body.provider === "openai" ? "openai" : "fal";
@@ -119,7 +121,7 @@ export async function POST(req: NextRequest) {
     referenceImage = body.referenceImage;
   }
 
-  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style);
+  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style, intensity);
 
   // For every tab except Twilight-exterior/Room-Match, FAL/OpenAI receive
   // just the one photo. Twilight-exterior appends the absolute URL of the sky

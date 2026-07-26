@@ -13,6 +13,17 @@ export type Mode = "interior" | "exterior";
 /** Which top-level feature tab the job was created under. */
 export type Tab = "declutter" | "enhance" | "restage" | "twilight" | "general";
 
+/**
+ * Declutter has two intensities:
+ * - "light": for an already-fairly-clean room — pick up small, unambiguous
+ *   items only (shoes, loose small objects, minor dirt) and leave everything
+ *   else untouched, including things a "heavy" pass would remove.
+ * - "heavy": the original full declutter pass — clears out clutter and
+ *   personal belongings more broadly, tidies bedding, etc. Default, so
+ *   existing behaviour for anyone who doesn't pick an intensity is unchanged.
+ */
+export type DeclutterIntensity = "light" | "heavy";
+
 /** Which sky reference image Twilight jobs should be composited against. */
 export type TwilightSky = "orange" | "purple";
 
@@ -56,6 +67,27 @@ ABSOLUTELY DO NOT (this is a legal requirement): change, move, add or remove any
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss, no colour shift. Subtle and real, not fantasy.`;
 
 export const EXTERIOR_PROMPT = `You are professionally editing an exterior/aerial photograph of a residential property for a real estate listing. Preserve the EXACT camera angle, framing and composition of the original photograph — do not re-compose, re-frame, or change the viewpoint. DO: remove clutter from the yard/driveway/street — cars, boats, trailers, caravans, bins, hoses, rubbish, movable objects; tidy and evenly green/repair a patchy or overgrown lawn; correct exposure, white balance and colour to a natural professional grade. ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky or change weather/time of day; remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only.`;
+
+/**
+ * Declutter — "Light" intensity. For a room/yard that's already fairly
+ * presentable and just needs a small tidy-up (a stray pair of shoes, a bit
+ * of dust, a hose left out) rather than the full clear-out the standard
+ * prompts above do. Deliberately narrower scope than INTERIOR_PROMPT /
+ * EXTERIOR_PROMPT — if it's not small and unambiguous, leave it alone.
+ */
+export const DECLUTTER_LIGHT_INTERIOR_PROMPT = `You are lightly tidying a real estate listing photograph of a room that is already fairly clean and presentable — this is a light touch-up pass, not a full declutter.
+
+DO: Remove only small, obviously out-of-place items directly in frame — shoes, a stray bag, loose small objects on the floor/benchtops/tables, stray cords, a small piece of rubbish, pet bowls or pet items — and clean up minor dirt, dust, smudges or marks on floors and surfaces. Leave everything else exactly as it is: do not rearrange or restyle furniture, do not restyle bedding beyond removing anything obviously loose or messy sitting on top of it, do not remove books, decor, plants, artwork or personal items that could plausibly be intentional styling. If an item is ambiguous or could be deliberate styling rather than clutter, leave it untouched. Only correct exposure where an area is genuinely too dark or too bright.
+
+ABSOLUTELY DO NOT (this is a legal requirement): change, move, add or remove any wall, window, door, ceiling, floor, or built-in fixture; change room dimensions or layout; add rooms, furniture, or features that are not physically present; remove or conceal any permanent defect (cracks, damp, mould, water stains, damage); replace the sky or change the weather/time of day; remove or alter anything outside this property (neighbouring buildings, power lines, fences, structures); never remove window coverings, blinds, curtains or security screens; never reposition or resize built-in appliances. ALSO DO NOT change the colour, hue, saturation or white balance of walls, tiles, benchtops, floors, cabinetry or any other surface — preserve the true, original paint and material colours exactly as photographed; do not introduce any colour cast, tint, wash, or haze over the image. Preserve the property's true architecture and every permanent feature EXACTLY as photographed.
+
+Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss, no colour shift. The result should look like the SAME photo with only a small handful of obvious items picked up, not a heavily reworked room.`;
+
+export const DECLUTTER_LIGHT_EXTERIOR_PROMPT = `You are lightly tidying an exterior/aerial real estate photograph of a property that is already fairly presentable — this is a light touch-up pass, not a full declutter. Preserve the EXACT camera angle, framing and composition of the original photograph — do not re-compose, re-frame, or change the viewpoint.
+
+DO: Remove only small, obviously out-of-place loose items directly in frame — shoes left by the door, a hose left out, a small bin left out, a stray piece of rubbish, a garden tool left lying around — and apply light exposure/white balance correction. Leave the lawn, garden beds and landscaping as photographed — do not regreen, repair or tidy the lawn or gardens; that is out of scope for a light pass. If an item is a larger object (a car, boat, trailer, caravan) or looks like it could be intentional (outdoor furniture, a planted pot, a bike stored neatly), leave it.
+
+ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky or change weather/time of day; remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there; regreen or repair the lawn. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only — the result should look like the SAME photo with only a small handful of obvious items picked up.`;
 
 /**
  * "Enhance" tab prompts — photographic finishing only, minimal/no decluttering.
@@ -187,7 +219,8 @@ export function buildPrompt(
   customPrompt?: string,
   matchReference?: boolean,
   sky?: TwilightSky,
-  style?: TwilightStyle
+  style?: TwilightStyle,
+  intensity?: DeclutterIntensity
 ): string {
   let base: string;
   if (tab === "general") {
@@ -206,6 +239,8 @@ export function buildPrompt(
     base = mode === "exterior" ? ENHANCE_EXTERIOR_PROMPT : ENHANCE_INTERIOR_PROMPT;
   } else if (tab === "restage") {
     base = mode === "exterior" ? RESTAGE_EXTERIOR_PROMPT : RESTAGE_INTERIOR_PROMPT;
+  } else if (intensity === "light") {
+    base = mode === "exterior" ? DECLUTTER_LIGHT_EXTERIOR_PROMPT : DECLUTTER_LIGHT_INTERIOR_PROMPT;
   } else {
     base = mode === "exterior" ? EXTERIOR_PROMPT : INTERIOR_PROMPT;
   }

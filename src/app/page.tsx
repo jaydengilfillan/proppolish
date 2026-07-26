@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
-import type { Mode, Tab, TwilightSky, TwilightStyle } from "@/lib/prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity } from "@/lib/prompts";
 import {
   ACCEPTED_TYPES,
   APP_NAME,
@@ -42,6 +42,11 @@ const STYLE_LABEL: Record<TwilightStyle, string> = {
   golden: "Golden",
 };
 
+const INTENSITY_LABEL: Record<DeclutterIntensity, string> = {
+  light: "Light",
+  heavy: "Heavy",
+};
+
 const MODE_LABEL: Record<Mode, string> = {
   interior: "Interior",
   exterior: "Exterior / Aerial",
@@ -69,6 +74,7 @@ export default function Home() {
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
   const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
   const [twilightStyle, setTwilightStyle] = useState<TwilightStyle>("natural");
+  const [declutterIntensity, setDeclutterIntensity] = useState<DeclutterIntensity>("heavy");
   const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
   const [generalPrompt, setGeneralPrompt] = useState("");
   const [dragging, setDragging] = useState(false);
@@ -96,6 +102,7 @@ export default function Home() {
         | "provider"
         | "sky"
         | "style"
+        | "intensity"
         | "customPrompt"
         | "width"
         | "height"
@@ -117,6 +124,7 @@ export default function Home() {
             provider: source.provider,
             sky: source.sky,
             style: source.style,
+            intensity: source.intensity,
             customPrompt: source.customPrompt,
             width: source.width,
             height: source.height,
@@ -153,6 +161,7 @@ export default function Home() {
             provider: job.provider,
             sky: job.sky,
             style: job.style,
+            intensity: job.intensity,
             customPrompt: job.customPrompt,
             width: job.width,
             height: job.height,
@@ -198,6 +207,7 @@ export default function Home() {
             provider,
             sky: tab === "twilight" ? twilightSky : undefined,
             style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
+            intensity: tab === "declutter" ? declutterIntensity : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "queued",
             originalUrl,
@@ -214,6 +224,7 @@ export default function Home() {
             provider,
             sky: tab === "twilight" ? twilightSky : undefined,
             style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
+            intensity: tab === "declutter" ? declutterIntensity : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
             status: "error",
             originalUrl,
@@ -235,7 +246,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, generalProvider, generalPrompt]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, declutterIntensity, generalProvider, generalPrompt]
   );
 
   const onDrop = useCallback(
@@ -495,6 +506,31 @@ export default function Home() {
                 Sent to the model exactly as typed — no built-in decluttering or
                 safety rules apply here, so describe exactly what you want.
               </p>
+            </div>
+          )}
+
+          {/* Declutter tab: Light vs Heavy intensity. Light is for an
+              already fairly clean room/yard — picks up only small,
+              unambiguous items (shoes, minor dirt) and leaves the rest
+              alone. Heavy is the original full declutter pass. */}
+          {activeTab === "declutter" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Intensity:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                {(Object.keys(INTENSITY_LABEL) as DeclutterIntensity[]).map((i) => (
+                  <button
+                    key={i}
+                    onClick={() => setDeclutterIntensity(i)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      declutterIntensity === i
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    {INTENSITY_LABEL[i]}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
