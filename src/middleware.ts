@@ -8,11 +8,10 @@ import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 // gated — those cost real money per call against FAL/OpenAI keys.
 const PUBLIC_PATHS = new Set(["/login", "/api/login", "/api/logout"]);
 
-// TEMPORARY: login was blocking real work mid-job, so the gate is paused
-// (everything passes through unauthenticated) until it's confirmed working
-// end-to-end on the live deployment. Flip EMERGENCY_BYPASS back to false
-// once that's sorted to re-enable the login requirement.
-const EMERGENCY_BYPASS = true;
+// Login gate is ON. (It was briefly bypassed to unblock a job mid-shift —
+// see git history on `main` around "EMERGENCY_BYPASS" — this branch turns
+// it back on once AUTH_USERS/AUTH_SECRET are confirmed correct in Vercel.)
+const EMERGENCY_BYPASS = false;
 
 export async function middleware(req: NextRequest) {
   if (EMERGENCY_BYPASS) return NextResponse.next();
