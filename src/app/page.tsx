@@ -287,6 +287,12 @@ export default function Home() {
     setJobs((prev) => prev.filter((j) => j.tab !== activeTab));
   }, [activeTab]);
 
+  const removeJob = useCallback((id: string) => {
+    const job = jobsRef.current.find((j) => j.id === id);
+    if (job) URL.revokeObjectURL(job.originalUrl);
+    setJobs((prev) => prev.filter((j) => j.id !== id));
+  }, []);
+
   const visibleJobs = useMemo(
     () => jobs.filter((j) => j.tab === activeTab),
     [jobs, activeTab]
@@ -733,6 +739,7 @@ export default function Home() {
                 key={job.id}
                 job={job}
                 onRetry={retry}
+                onRemove={removeJob}
               />
             ))}
           </section>

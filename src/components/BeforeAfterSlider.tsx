@@ -59,7 +59,9 @@ export default function BeforeAfterSlider({ beforeUrl, afterUrl, className }: Pr
       <span className="absolute left-2 top-2 rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
         Before
       </span>
-      <span className="absolute right-2 top-2 rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
+      {/* Shifted left of right-2 to leave room for JobCard's overlaid
+          remove (x) button, which sits at the very top-right corner. */}
+      <span className="absolute right-9 top-2 rounded bg-black/55 px-2 py-0.5 text-[11px] font-medium text-white">
         After
       </span>
 

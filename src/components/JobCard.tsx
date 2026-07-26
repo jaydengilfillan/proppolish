@@ -10,6 +10,7 @@ import BeforeAfterSlider from "./BeforeAfterSlider";
 interface Props {
   job: Job;
   onRetry: (id: string, note: string) => void;
+  onRemove: (id: string) => void;
 }
 
 const STATUS_LABEL: Record<Job["status"], string> = {
@@ -36,7 +37,7 @@ const SKY_LABEL: Record<TwilightSky, string> = {
   purple: "Purple twilight",
 };
 
-export default function JobCard({ job, onRetry }: Props) {
+export default function JobCard({ job, onRetry, onRemove }: Props) {
   const [note, setNote] = useState("");
   const [downloading, setDownloading] = useState(false);
 
@@ -95,25 +96,46 @@ export default function JobCard({ job, onRetry }: Props) {
       )}
 
       {/* Media area */}
-      {job.status === "done" && job.resultUrl ? (
-        <BeforeAfterSlider beforeUrl={job.originalUrl} afterUrl={job.resultUrl} />
-      ) : (
-        <div className="relative overflow-hidden rounded-lg bg-neutral-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={job.originalUrl}
-            alt={job.fileName}
-            className={`block w-full ${job.status === "processing" ? "opacity-60" : ""}`}
-          />
-          {job.status === "processing" && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
-                Polishing…
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="group relative overflow-hidden rounded-lg bg-neutral-100">
+        {job.status === "done" && job.resultUrl ? (
+          <BeforeAfterSlider beforeUrl={job.originalUrl} afterUrl={job.resultUrl} />
+        ) : (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={job.originalUrl}
+              alt={job.fileName}
+              className={`block w-full ${job.status === "processing" ? "opacity-60" : ""}`}
+            />
+            {job.status === "processing" && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white">
+                  Polishing…
+                </span>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Remove this photo — dim until hovered so it doesn't clutter the
+            thumbnail, so it's easy to keep track of what's finished vs not
+            while still being able to clear individual cards. */}
+        <button
+          onClick={() => onRemove(job.id)}
+          aria-label={`Remove ${job.fileName}`}
+          title="Remove"
+          className="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-30 transition hover:bg-black/80 hover:opacity-100 group-hover:opacity-100"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5">
+            <path
+              d="M5 5l10 10M15 5L5 15"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      </div>
 
       {job.status === "error" && (
         <p className="rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-700">
