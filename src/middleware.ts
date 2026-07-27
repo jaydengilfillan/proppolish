@@ -6,7 +6,7 @@ import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 // - /api/logout: needs to be callable to clear a stale/invalid cookie.
 // Everything else (including /api/process and /api/analyze-floorplan) is
 // gated — those cost real money per call against FAL/OpenAI keys.
-const PUBLIC_PATHS = new Set(["/login", "/api/login", "/api/logout"]);
+const PUBLIC_PATHS = new Set(["/login", "/api/login", "/api/logout", "/api/auth-status"]);
 
 // Login gate is ON. (It was briefly bypassed to unblock a job mid-shift —
 // see git history on `main` around "EMERGENCY_BYPASS" — this branch turns
