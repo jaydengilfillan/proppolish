@@ -333,7 +333,7 @@ export default function Home() {
       }
       const zip = buildZip(entries);
       const url = URL.createObjectURL(zip);
-      triggerDownload(url, `${APP_NAME.toLowerCase()}-polished.zip`);
+      triggerDownload(url, `${APP_NAME.toLowerCase().replace(/\s+/g, "-")}-polished.zip`);
       URL.revokeObjectURL(url);
     } catch {
       // Non-fatal: individual Download buttons still work per card.

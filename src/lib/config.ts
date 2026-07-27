@@ -8,7 +8,7 @@ import type { TwilightSky } from "./prompts";
 // ---------------------------------------------------------------------------
 // Branding — change this one constant to rebrand the whole app.
 // ---------------------------------------------------------------------------
-export const APP_NAME = "PropPolish";
+export const APP_NAME = "1080X MEDIA AI";
 export const APP_TAGLINE = "Declutter and finish your listing photos with AI.";
 
 // ---------------------------------------------------------------------------
