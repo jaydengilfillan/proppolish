@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError } from "@/lib/fal";
 import { openaiEdit, OpenAIImageError } from "@/lib/openai";
-import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
+import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import { resolutionTier, Provider, TWILIGHT_SKIES } from "@/lib/config";
 
 // This route calls the model provider synchronously. FAL is usually fast
@@ -23,6 +23,7 @@ interface ProcessBody {
   style?: unknown; // "natural" | "golden" (only meaningful when tab === "twilight" && mode === "interior")
   intensity?: unknown; // "light" | "heavy" (only meaningful when tab === "declutter")
   enhanceType?: unknown; // "standard" | "night" (only meaningful when tab === "enhance")
+  scene?: unknown; // "dusk" | "night_city" (only meaningful when tab === "twilight")
   customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
   referenceImage?: unknown; // Room Match: URL/data URI of the anchor's staged result, only meaningful when tab === "restage"
   width?: unknown; // original (pre-downscale) width, used by the OpenAI provider
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
     const style: TwilightStyle = body.style === "golden" ? "golden" : "natural";
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
+    const scene: TwilightScene = body.scene === "night_city" ? "night_city" : "dusk";
     // Twilight is a Nano Banana (FAL) multi-image edit only — no OpenAI path.
     // Prompt (general) can go either way, same as Enhance.
     const provider: Provider = tab === "twilight" ? "fal" : body.provider === "openai" ? "openai" : "fal";
@@ -123,19 +125,20 @@ export async function POST(req: NextRequest) {
     referenceImage = body.referenceImage;
   }
 
-  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style, intensity, enhanceType);
+  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style, intensity, enhanceType, scene);
 
-  // For every tab except Twilight-exterior/Room-Match, FAL/OpenAI receive
-  // just the one photo. Twilight-exterior appends the absolute URL of the sky
-  // reference (FAL fetches images by URL — a relative path won't work) since
-  // it needs to repaint the sky to match it exactly. Twilight-interior does
-  // NOT send the reference image — the walls kept picking up its orange/
-  // purple hue as a colour grade no matter what the prompt said, so interior
-  // jobs describe the sky in words instead (see TWILIGHT_SKY_DESCRIPTIONS)
-  // and only the actual photo is sent. Room Match appends the anchor's
+  // For every tab except Twilight-dusk-exterior/Room-Match, FAL/OpenAI
+  // receive just the one photo. Twilight-dusk-exterior appends the absolute
+  // URL of the sky reference (FAL fetches images by URL — a relative path
+  // won't work) since it needs to repaint the sky to match it exactly.
+  // Twilight-interior and Twilight-night-city do NOT send a reference image —
+  // the walls/skyline kept picking up its colour as a global grade no matter
+  // what the prompt said, so those describe the sky/scene in words instead
+  // (see TWILIGHT_SKY_DESCRIPTIONS / TWILIGHT_NIGHT_CITYSCAPE_PROMPT) and
+  // only the actual photo is sent. Room Match appends the anchor's
   // already-staged result so this angle can be generated to match it.
   const imageUrls: string[] = [body.image as string];
-  if (tab === "twilight" && mode === "exterior") {
+  if (tab === "twilight" && scene === "dusk" && mode === "exterior") {
     const skyPath = TWILIGHT_SKIES[sky];
     imageUrls.push(new URL(skyPath, req.nextUrl.origin).toString());
   }

@@ -50,6 +50,18 @@ export type TwilightSky = "orange" | "purple";
 export type TwilightStyle = "natural" | "golden";
 
 /**
+ * Twilight has two scenes:
+ * - "dusk" (default): the original sunset/twilight look — sky-swap on
+ *   exterior hero shots, dusk-through-the-window on interior shots.
+ * - "night_city": converts a daytime balcony/rooftop/high-rise view of a
+ *   city skyline into a full night cityscape — every building's windows lit,
+ *   dark night sky, everything else (building shapes, layout, any signage)
+ *   locked exactly as photographed. Always treated as exterior/aerial —
+ *   there's no "interior" version of a skyline shot.
+ */
+export type TwilightScene = "dusk" | "night_city";
+
+/**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
  * instead of sending the actual reference photo. Interior jobs kept picking up
  * the reference image's orange/purple hue as a global colour grade across
@@ -209,6 +221,27 @@ ABSOLUTELY DO NOT (this is a legal requirement): add any light fixture, lamp, do
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss.`;
 
 /**
+ * Twilight, "Night city" scene — converts a daytime balcony/rooftop/
+ * high-rise view of a city skyline into a full night cityscape. Distinct
+ * from TWILIGHT_EXTERIOR_PROMPT: that one lights up ONE subject building's
+ * existing fixtures against a dusk sky reference image; this one has to
+ * light up EVERY building across a whole skyline and go fully dark, with no
+ * reference image at all (there's no single "night city" photo to send —
+ * it's described in words, same reasoning as the interior prompts above).
+ * Explicit emphasis on preserving building shapes/layout and any signage,
+ * per the app owner's requirement.
+ */
+export const TWILIGHT_NIGHT_CITYSCAPE_PROMPT = `You are professionally converting a daytime real estate photograph — typically a balcony, rooftop terrace, or high-rise view looking out over a city skyline — into a realistic night-time cityscape, as if the same view were photographed well after dark.
+
+DO: Darken the sky to a realistic night sky — deep navy/black, with a soft natural glow near the horizon where city light bounces off the atmosphere, exactly like a real city at night. Light up the skyline: give the buildings across the view a natural scatter of illuminated windows (not every window lit — a realistic, varied mix, like real offices/apartments at night), and turn on any street lighting, and illuminate any signage on buildings using the EXACT SAME text/logo already visible in the daytime photo. If a pool, balcony floor, railing or foreground furniture is in frame, light it naturally for night-time — illuminate a pool a natural light blue if present. Keep the camera angle, framing, composition and the entire skyline's layout exactly the same as the original.
+
+BUILDINGS, LAYOUT AND TEXT MUST STAY EXACTLY THE SAME — THIS IS THE MOST IMPORTANT RULE, NOT OPTIONAL: every building's shape, height, position, rooftop features and window grid must be identical to the daytime original — this is a lighting/time-of-day change only, never a redesign. Any signage, lettering, logos or branding visible on any building must be preserved EXACTLY as photographed — do not regenerate, reinterpret, misspell, blur, or invent new signage or text anywhere in the frame. Do not add, remove, resize, or relocate any building.
+
+ABSOLUTELY DO NOT (this is a legal requirement): add, remove, move or resize any building or structure in the skyline; change the property's own architecture, balcony, railing, or any permanent feature; alter, invent, misspell, or remove any signage, lettering, logo or branding visible on any building; change the camera angle, framing, composition or perspective; add fireworks, aircraft, searchlights, or other dramatic elements that wouldn't realistically be there; over-light the scene into something that looks like a video game or fantasy skyline. Preserve the true skyline and every permanent structure EXACTLY as photographed, from the same viewpoint — only the lighting and time of day may change.
+
+Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted buildings, no fake gloss, no invented skyline elements.`;
+
+/**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
  * Enhance jobs. gpt-image-2 handles fine surface texture work well, so we ask it
  * to specifically look at hard surfaces (driveways, paths, gutters, downpipes,
@@ -248,7 +281,8 @@ export function buildPrompt(
   sky?: TwilightSky,
   style?: TwilightStyle,
   intensity?: DeclutterIntensity,
-  enhanceType?: EnhanceType
+  enhanceType?: EnhanceType,
+  scene?: TwilightScene
 ): string {
   let base: string;
   if (tab === "general") {
@@ -257,7 +291,9 @@ export function buildPrompt(
     // full control, so full responsibility for what it does to the photo.
     base = (customPrompt ?? "").trim();
   } else if (tab === "twilight") {
-    if (mode === "exterior") {
+    if (scene === "night_city") {
+      base = TWILIGHT_NIGHT_CITYSCAPE_PROMPT;
+    } else if (mode === "exterior") {
       base = TWILIGHT_EXTERIOR_PROMPT;
     } else {
       const template = style === "golden" ? TWILIGHT_INTERIOR_GOLDEN_PROMPT : TWILIGHT_INTERIOR_PROMPT;

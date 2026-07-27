@@ -1,4 +1,4 @@
-import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity, EnhanceType } from "./prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "./prompts";
 import type { Provider } from "./config";
 
 export type JobStatus = "queued" | "processing" | "done" | "error";
@@ -13,8 +13,10 @@ export interface Job {
   provider?: Provider;
     /** Which sky reference to composite against — only meaningful when tab === "twilight". */
   sky?: TwilightSky;
-    /** Interior look — "natural" (true wall colour) or "golden" (warm ambient glow). Only meaningful when tab === "twilight" && mode === "interior". */
+    /** Interior look — "natural" (true wall colour) or "golden" (warm ambient glow). Only meaningful when tab === "twilight" && mode === "interior" && scene === "dusk". */
   style?: TwilightStyle;
+    /** "dusk" (default sunset/twilight) vs "night_city" (full night cityscape conversion, e.g. a balcony skyline shot). Only meaningful when tab === "twilight". */
+  scene?: TwilightScene;
     /** Light (small tidy-up) vs heavy (full declutter) — only meaningful when tab === "declutter". */
   intensity?: DeclutterIntensity;
     /** "standard" (mode-based) vs "night" (blurry drone restoration) — only meaningful when tab === "enhance". */

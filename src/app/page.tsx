@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Job, JobStatus } from "@/lib/types";
-import type { Mode, Tab, TwilightSky, TwilightStyle, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
+import type { Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import {
   ACCEPTED_TYPES,
   APP_NAME,
@@ -42,6 +42,11 @@ const STYLE_LABEL: Record<TwilightStyle, string> = {
   golden: "Golden",
 };
 
+const SCENE_LABEL: Record<TwilightScene, string> = {
+  dusk: "Twilight",
+  night_city: "Night city",
+};
+
 const INTENSITY_LABEL: Record<DeclutterIntensity, string> = {
   light: "Light",
   heavy: "Heavy",
@@ -79,6 +84,7 @@ export default function Home() {
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
   const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
   const [twilightStyle, setTwilightStyle] = useState<TwilightStyle>("natural");
+  const [twilightScene, setTwilightScene] = useState<TwilightScene>("dusk");
   const [declutterIntensity, setDeclutterIntensity] = useState<DeclutterIntensity>("heavy");
   const [enhanceType, setEnhanceType] = useState<EnhanceType>("standard");
   const [username, setUsername] = useState<string | null>(null);
@@ -109,6 +115,7 @@ export default function Home() {
         | "provider"
         | "sky"
         | "style"
+        | "scene"
         | "intensity"
         | "enhanceType"
         | "customPrompt"
@@ -132,6 +139,7 @@ export default function Home() {
             provider: source.provider,
             sky: source.sky,
             style: source.style,
+            scene: source.scene,
             intensity: source.intensity,
             enhanceType: source.enhanceType,
             customPrompt: source.customPrompt,
@@ -170,6 +178,7 @@ export default function Home() {
             provider: job.provider,
             sky: job.sky,
             style: job.style,
+            scene: job.scene,
             intensity: job.intensity,
             enhanceType: job.enhanceType,
             customPrompt: job.customPrompt,
@@ -192,7 +201,11 @@ export default function Home() {
       // prompt itself ignores mode, but keep the Job's own mode field honest
       // rather than leaving it as whatever Interior/Exterior was last picked.
       const mode =
-        tab === "enhance" && enhanceType === "night" ? "exterior" : overrideMode ?? activeMode;
+        tab === "enhance" && enhanceType === "night"
+          ? "exterior"
+          : tab === "twilight" && twilightScene === "night_city"
+            ? "exterior"
+            : overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
         (ACCEPTED_TYPES as readonly string[]).includes(f.type)
       );
@@ -220,7 +233,8 @@ export default function Home() {
             tab,
             provider,
             sky: tab === "twilight" ? twilightSky : undefined,
-            style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
+            style: tab === "twilight" && mode === "interior" && twilightScene === "dusk" ? twilightStyle : undefined,
+            scene: tab === "twilight" ? twilightScene : undefined,
             intensity: tab === "declutter" ? declutterIntensity : undefined,
             enhanceType: tab === "enhance" ? enhanceType : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
@@ -238,7 +252,8 @@ export default function Home() {
             tab,
             provider,
             sky: tab === "twilight" ? twilightSky : undefined,
-            style: tab === "twilight" && mode === "interior" ? twilightStyle : undefined,
+            style: tab === "twilight" && mode === "interior" && twilightScene === "dusk" ? twilightStyle : undefined,
+            scene: tab === "twilight" ? twilightScene : undefined,
             intensity: tab === "declutter" ? declutterIntensity : undefined,
             enhanceType: tab === "enhance" ? enhanceType : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
@@ -262,7 +277,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, declutterIntensity, enhanceType, generalProvider, generalPrompt]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, twilightScene, declutterIntensity, enhanceType, generalProvider, generalPrompt]
   );
 
   const onDrop = useCallback(
@@ -475,7 +490,8 @@ export default function Home() {
           auto-processed wrong mode, then again on Retry after switching it). */}
       {view === "process" &&
         activeTab !== "general" &&
-        !(activeTab === "enhance" && enhanceType === "night") && (
+        !(activeTab === "enhance" && enhanceType === "night") &&
+        !(activeTab === "twilight" && twilightScene === "night_city") && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -614,12 +630,40 @@ export default function Home() {
             </div>
           )}
 
+          {/* Twilight tab: scene picker. "Twilight" is the original sunset/
+              dusk conversion. "Night city" is a different job entirely — it
+              turns a daytime balcony/rooftop/high-rise skyline shot into a
+              full night cityscape (every building lit, dark sky), always
+              treated as exterior/aerial, and doesn't use the Sky/Look
+              options below (those are dusk-only concepts). */}
+          {activeTab === "twilight" && (
+            <div className="mb-4 flex items-center gap-2">
+              <span className="text-xs text-neutral-500">Scene:</span>
+              <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
+                {(Object.keys(SCENE_LABEL) as TwilightScene[]).map((sc) => (
+                  <button
+                    key={sc}
+                    onClick={() => setTwilightScene(sc)}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                      twilightScene === sc
+                        ? "bg-white text-neutral-900 shadow-sm"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }`}
+                  >
+                    {SCENE_LABEL[sc]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Twilight tab: sky reference picker. Default is the orange sunset.
               For exterior shots this decides which reference image is sent
               alongside the photo; for interior shots it only informs the
               wording used to describe the window view (no image is sent for
-              interior — see prompts.ts). */}
-          {activeTab === "twilight" && (
+              interior — see prompts.ts). Dusk scene only — Night city
+              describes its own night sky, no picker needed. */}
+          {activeTab === "twilight" && twilightScene === "dusk" && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Sky:</span>
               <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -640,11 +684,12 @@ export default function Home() {
             </div>
           )}
 
-          {/* Twilight interior only: Natural keeps walls at their true
-              daytime colour (only fixtures glow warm). Golden allows a
-              deliberate warm golden-hour glow across the whole room — this
-              is the look picked after testing, not a bug being tolerated. */}
-          {activeTab === "twilight" && activeMode === "interior" && (
+          {/* Twilight interior + dusk scene only: Natural keeps walls at
+              their true daytime colour (only fixtures glow warm). Golden
+              allows a deliberate warm golden-hour glow across the whole
+              room — this is the look picked after testing, not a bug being
+              tolerated. */}
+          {activeTab === "twilight" && activeMode === "interior" && twilightScene === "dusk" && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Look:</span>
               <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
