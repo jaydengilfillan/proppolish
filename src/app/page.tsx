@@ -512,15 +512,26 @@ export default function Home() {
         </div>
       )}
 
-      {view === "hdr" ? (
+      {/* All of these stay mounted at all times (just hidden via CSS when
+          not the active view) rather than being conditionally rendered.
+          Conditional rendering was unmounting them on every tab switch,
+          which wiped their internal state — uploaded Room Match photos,
+          HDR brackets, in-progress Floor Plan drawings — with no way back.
+          Keeping them mounted costs a bit of idle DOM, not worth losing a
+          real job over. */}
+      <div style={{ display: view === "hdr" ? "block" : "none" }}>
         <HdrBlend onSend={handleHandoffSend} />
-      ) : view === "match" ? (
+      </div>
+      <div style={{ display: view === "match" ? "block" : "none" }}>
         <RoomMatch />
-      ) : view === "floorplan" ? (
+      </div>
+      <div style={{ display: view === "floorplan" ? "block" : "none" }}>
         <FloorPlan />
-      ) : view === "notes" ? (
+      </div>
+      <div style={{ display: view === "notes" ? "block" : "none" }}>
         <Notes onUseInPrompt={handleUseNotePrompt} />
-      ) : (
+      </div>
+      <div style={{ display: view === "process" ? "block" : "none" }}>
         <>
           {/* Enhance tab: type selector. Standard is the usual mode-based
               lighting/finishing pass. Night is a restoration pass for blurry
@@ -821,7 +832,7 @@ export default function Home() {
             ))}
           </section>
         </>
-      )}
+      </div>
 
       {/* Footer note */}
       <footer className="mt-10 border-t border-neutral-200 pt-4 text-[11px] leading-relaxed text-neutral-400">
