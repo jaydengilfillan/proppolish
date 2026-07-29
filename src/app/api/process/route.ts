@@ -26,9 +26,12 @@ interface ProcessBody {
   scene?: unknown; // "dusk" | "night_city" (only meaningful when tab === "twilight")
   customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
   referenceImage?: unknown; // Room Match: URL/data URI of the anchor's staged result, only meaningful when tab === "restage"
+  referenceImages?: unknown; // Prompt tab: array of up to 2 style/content reference data URIs, only meaningful when tab === "general"
   width?: unknown; // original (pre-downscale) width, used by the OpenAI provider
   height?: unknown; // original (pre-downscale) height, used by the OpenAI provider
 }
+
+const MAX_REFERENCE_IMAGES = 2;
 
 function isDataUri(v: unknown): v is string {
     return typeof v === "string" && v.startsWith("data:image/") && v.includes("base64,");
@@ -125,6 +128,26 @@ export async function POST(req: NextRequest) {
     referenceImage = body.referenceImage;
   }
 
+  // Prompt tab: optional array of up to 2 style/content reference photos,
+  // sent alongside the main photo to both FAL (as extra image_urls) and
+  // OpenAI (as extra image[] entries).
+  let referenceImages: string[] | undefined;
+  if (tab === "general" && body.referenceImages !== undefined && body.referenceImages !== null) {
+    if (!Array.isArray(body.referenceImages) || !body.referenceImages.every(isImageRef)) {
+      return NextResponse.json(
+        { error: "referenceImages must be an array of image URLs or base64 data URIs." },
+        { status: 400 }
+      );
+    }
+    if (body.referenceImages.length > MAX_REFERENCE_IMAGES) {
+      return NextResponse.json(
+        { error: `You can attach at most ${MAX_REFERENCE_IMAGES} reference images.` },
+        { status: 400 }
+      );
+    }
+    referenceImages = body.referenceImages as string[];
+  }
+
   const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style, intensity, enhanceType, scene);
 
   // For every tab except Twilight-dusk-exterior/Room-Match, FAL/OpenAI
@@ -145,11 +168,14 @@ export async function POST(req: NextRequest) {
   if (referenceImage) {
     imageUrls.push(referenceImage);
   }
+  if (referenceImages) {
+    imageUrls.push(...referenceImages);
+  }
 
   try {
         const outputUrl =
                 provider === "openai"
-            ? await openaiEdit({ prompt, imageDataUri: body.image, width, height })
+            ? await openaiEdit({ prompt, imageDataUri: body.image, width, height, referenceImages })
                   : await falEdit({
                                 prompt,
                                 imageUrls,

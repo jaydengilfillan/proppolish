@@ -18,6 +18,17 @@ export interface DownscaledImage {
 // can otherwise exceed the limit and the upload fails with HTTP 413.
 const MAX_UPLOAD_BYTES = 3_400_000;
 
+// Prompt-tab reference images ride in the SAME request body as the main
+// photo, so they get a much smaller budget each — they only need to convey
+// style/content to the model, not full resolution. Two of these plus the
+// main photo (with its own slightly reduced budget when references are
+// attached, see downscaleImage's maxBytes override) stays safely under the
+// same overall ceiling the app already relies on for a single 4K photo.
+const REFERENCE_MAX_EDGE = 1024;
+const REFERENCE_MAX_UPLOAD_BYTES = 250_000;
+/** Main photo's budget when one or more reference images are also being sent. */
+export const MAIN_IMAGE_BYTES_WITH_REFERENCES = 2_900_000;
+
 /**
  * Load a File into an HTMLImageElement via an object URL, resize it on a canvas
  * so the longest edge is <= MAX_EDGE, and re-encode as JPEG. If the encoded
@@ -26,8 +37,15 @@ const MAX_UPLOAD_BYTES = 3_400_000;
  *
  * This happens BEFORE upload so we never exceed Vercel's ~4.5MB serverless body
  * limit and we stay within the model's input cap.
+ *
+ * @param maxUploadBytesOverride Use a smaller budget than the default — the
+ * Prompt tab passes this when reference images are also being sent in the
+ * same request, to leave them room.
  */
-export async function downscaleImage(file: File): Promise<DownscaledImage> {
+export async function downscaleImage(
+  file: File,
+  maxUploadBytesOverride?: number
+): Promise<DownscaledImage> {
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await loadImage(objectUrl);
@@ -41,7 +59,33 @@ export async function downscaleImage(file: File): Promise<DownscaledImage> {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, 0, 0, width, height);
 
-    return encodeUnderBudget(canvas);
+    return encodeUnderBudget(canvas, maxUploadBytesOverride ?? MAX_UPLOAD_BYTES);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/**
+ * Same idea as downscaleImage, but for Prompt-tab reference images: a much
+ * smaller target size (REFERENCE_MAX_EDGE / REFERENCE_MAX_UPLOAD_BYTES),
+ * since these just need to convey style/content to the model, not full
+ * resolution, and have to share request-body budget with the main photo.
+ */
+export async function downscaleReferenceImage(file: File): Promise<DownscaledImage> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const img = await loadImage(objectUrl);
+    const { width, height } = fitWithin(img.naturalWidth, img.naturalHeight, REFERENCE_MAX_EDGE);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get a 2D canvas context in this browser.");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, 0, 0, width, height);
+
+    return encodeUnderBudget(canvas, REFERENCE_MAX_UPLOAD_BYTES);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -76,11 +120,11 @@ export function fitWithin(
  * width/height (which may be smaller than the input canvas if a further
  * shrink was needed).
  */
-function encodeUnderBudget(canvas: HTMLCanvasElement): DownscaledImage {
+function encodeUnderBudget(canvas: HTMLCanvasElement, maxUploadBytes: number): DownscaledImage {
   let quality = JPEG_QUALITY;
   let dataUri = canvas.toDataURL("image/jpeg", quality);
 
-  while (estimateBytes(dataUri) > MAX_UPLOAD_BYTES && quality > 0.4) {
+  while (estimateBytes(dataUri) > maxUploadBytes && quality > 0.4) {
     quality = Math.round((quality - 0.1) * 10) / 10;
     dataUri = canvas.toDataURL("image/jpeg", quality);
   }
@@ -90,7 +134,7 @@ function encodeUnderBudget(canvas: HTMLCanvasElement): DownscaledImage {
   let source: HTMLCanvasElement = canvas;
   let scale = 1;
 
-  while (estimateBytes(dataUri) > MAX_UPLOAD_BYTES && scale > 0.35) {
+  while (estimateBytes(dataUri) > maxUploadBytes && scale > 0.35) {
     scale -= 0.15;
     width = Math.max(1, Math.round(canvas.width * scale));
     height = Math.max(1, Math.round(canvas.height * scale));

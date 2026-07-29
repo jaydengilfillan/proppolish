@@ -12,7 +12,13 @@ import {
   MAX_EDGE,
 } from "@/lib/config";
 import type { Provider } from "@/lib/config";
-import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
+import {
+  downscaleImage,
+  downscaleReferenceImage,
+  MAIN_IMAGE_BYTES_WITH_REFERENCES,
+  triggerDownload,
+  urlToBlob,
+} from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import JobCard from "@/components/JobCard";
 import HdrBlend from "@/components/HdrBlend";
@@ -90,6 +96,11 @@ export default function Home() {
   const [username, setUsername] = useState<string | null>(null);
   const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
   const [generalPrompt, setGeneralPrompt] = useState("");
+  // Prompt tab: up to 2 optional style/content reference photos, attached
+  // once per batch and sent alongside every photo queued while set.
+  const [generalReferences, setGeneralReferences] = useState<{ id: string; dataUri: string }[]>([]);
+  const [referenceLoading, setReferenceLoading] = useState(false);
+  const MAX_REFERENCE_IMAGES = 2;
   const [dragging, setDragging] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -119,6 +130,7 @@ export default function Home() {
         | "intensity"
         | "enhanceType"
         | "customPrompt"
+        | "referenceImages"
         | "width"
         | "height"
       >
@@ -143,6 +155,7 @@ export default function Home() {
             intensity: source.intensity,
             enhanceType: source.enhanceType,
             customPrompt: source.customPrompt,
+            referenceImages: source.referenceImages,
             width: source.width,
             height: source.height,
             note,
@@ -182,6 +195,7 @@ export default function Home() {
             intensity: job.intensity,
             enhanceType: job.enhanceType,
             customPrompt: job.customPrompt,
+            referenceImages: job.referenceImages,
             width: job.width,
             height: job.height,
           });
@@ -219,13 +233,21 @@ export default function Home() {
       const provider =
         tab === "enhance" ? enhanceProvider : tab === "general" ? generalProvider : undefined;
 
+      // Prompt tab: any attached reference photos ride along in the same
+      // request as the main photo, so the main photo gets a smaller budget
+      // to leave them room (see MAIN_IMAGE_BYTES_WITH_REFERENCES in image.ts).
+      const referenceDataUris = tab === "general" ? generalReferences.map((r) => r.dataUri) : [];
+
       setLoadingFiles(true);
       const newJobs: Job[] = [];
       for (const file of files) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const originalUrl = URL.createObjectURL(file);
         try {
-          const { dataUri, width, height } = await downscaleImage(file);
+          const { dataUri, width, height } = await downscaleImage(
+            file,
+            referenceDataUris.length > 0 ? MAIN_IMAGE_BYTES_WITH_REFERENCES : undefined
+          );
           newJobs.push({
             id,
             fileName: file.name,
@@ -238,6 +260,7 @@ export default function Home() {
             intensity: tab === "declutter" ? declutterIntensity : undefined,
             enhanceType: tab === "enhance" ? enhanceType : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
+            referenceImages: referenceDataUris.length > 0 ? referenceDataUris : undefined,
             status: "queued",
             originalUrl,
             downscaledDataUri: dataUri,
@@ -257,6 +280,7 @@ export default function Home() {
             intensity: tab === "declutter" ? declutterIntensity : undefined,
             enhanceType: tab === "enhance" ? enhanceType : undefined,
             customPrompt: tab === "general" ? trimmedGeneralPrompt : undefined,
+            referenceImages: referenceDataUris.length > 0 ? referenceDataUris : undefined,
             status: "error",
             originalUrl,
             downscaledDataUri: "",
@@ -277,7 +301,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, twilightScene, declutterIntensity, enhanceType, generalProvider, generalPrompt]
+    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, twilightScene, declutterIntensity, enhanceType, generalProvider, generalPrompt, generalReferences]
   );
 
   const onDrop = useCallback(
@@ -288,6 +312,33 @@ export default function Home() {
     },
     [addFiles]
   );
+
+  /** Prompt tab: attach up to MAX_REFERENCE_IMAGES style/content reference
+      photos. Downscaled immediately (small budget) and reused for every
+      photo queued in this batch, until removed. */
+  const addReferenceFiles = useCallback(
+    async (fileList: FileList | File[]) => {
+      const files = Array.from(fileList)
+        .filter((f) => (ACCEPTED_TYPES as readonly string[]).includes(f.type))
+        .slice(0, Math.max(0, MAX_REFERENCE_IMAGES - generalReferences.length));
+      if (files.length === 0) return;
+      setReferenceLoading(true);
+      try {
+        for (const file of files) {
+          const { dataUri } = await downscaleReferenceImage(file);
+          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          setGeneralReferences((prev) => [...prev, { id, dataUri }]);
+        }
+      } finally {
+        setReferenceLoading(false);
+      }
+    },
+    [generalReferences.length]
+  );
+
+  const removeReferenceImage = useCallback((id: string) => {
+    setGeneralReferences((prev) => prev.filter((r) => r.id !== id));
+  }, []);
 
   const retry = useCallback(
     (id: string, note: string) => {
@@ -613,6 +664,48 @@ export default function Home() {
                 Sent to the model exactly as typed — no built-in decluttering or
                 safety rules apply here, so describe exactly what you want.
               </p>
+
+              {/* Optional reference photos: e.g. a style you want matched, or
+                  an object/material to copy in. Downscaled small since they
+                  ride in the same request as the main photo. Applied to
+                  every photo queued while attached. */}
+              <div className="mt-2 flex flex-col gap-2">
+                <span className="text-xs text-neutral-500">
+                  Reference images (optional, up to {MAX_REFERENCE_IMAGES}):
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {generalReferences.map((ref) => (
+                    <div key={ref.id} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-neutral-300">
+                      <img src={ref.dataUri} alt="Reference" className="h-full w-full object-cover" />
+                      <button
+                        onClick={() => removeReferenceImage(ref.id)}
+                        className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-60 transition hover:opacity-100"
+                        aria-label="Remove reference image"
+                      >
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3">
+                          <path d="M10 8.586 14.293 4.293a1 1 0 1 1 1.414 1.414L11.414 10l4.293 4.293a1 1 0 0 1-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 0 1-1.414-1.414L8.586 10 4.293 5.707a1 1 0 0 1 1.414-1.414L10 8.586Z" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                  {generalReferences.length < MAX_REFERENCE_IMAGES && (
+                    <label className="flex h-16 w-16 cursor-pointer items-center justify-center rounded-lg border border-dashed border-neutral-300 text-[11px] text-neutral-400 hover:border-neutral-400 hover:text-neutral-600">
+                      {referenceLoading ? "…" : "+ Add"}
+                      <input
+                        type="file"
+                        accept={ACCEPTED_TYPES.join(",")}
+                        multiple
+                        className="hidden"
+                        disabled={referenceLoading}
+                        onChange={(e) => {
+                          if (e.target.files?.length) addReferenceFiles(e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 

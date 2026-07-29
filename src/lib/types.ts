@@ -23,6 +23,8 @@ export interface Job {
   enhanceType?: EnhanceType;
     /** The user's own free-text prompt — only meaningful (and required) when tab === "general". */
   customPrompt?: string;
+    /** Optional style/content reference photos (downscaled JPEG data URIs), up to 2 — only meaningful when tab === "general". */
+  referenceImages?: string[];
     status: JobStatus;
     /** Object URL of the ORIGINAL upload — used for the "before" view + download-original. */
   originalUrl: string;

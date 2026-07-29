@@ -22,6 +22,8 @@ export interface OpenAIEditParams {
     /** Original (pre-downscale) width/height, used to pick a matching output aspect ratio. */
   width?: number;
     height?: number;
+    /** Prompt tab only: extra style/content reference photos as data URIs (up to 2). */
+  referenceImages?: string[];
 }
 
 /**
@@ -52,7 +54,19 @@ export async function openaiEdit(params: OpenAIEditParams): Promise<string> {
     form.append("prompt", params.prompt);
     form.append("quality", OPENAI_QUALITY);
     form.append("size", size);
-    form.append("image", imageBlob, "input.jpg");
+    const references = params.referenceImages ?? [];
+    if (references.length > 0) {
+          // gpt-image-2's edit endpoint accepts an ARRAY of images (up to 16)
+          // via repeated "image[]" fields when more than one is sent — the
+          // main photo plus any Prompt-tab reference images the user attached.
+          form.append("image[]", imageBlob, "input.jpg");
+          references.forEach((dataUri, i) => {
+                  form.append("image[]", dataUriToBlob(dataUri), `reference-${i}.jpg`);
+          });
+    } else {
+          // Unchanged single-image path used by every other tab.
+          form.append("image", imageBlob, "input.jpg");
+    }
 
   let resp: Response;
     try {
