@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { falEdit, FalError } from "@/lib/fal";
+import { falEdit, FalError, nearestFalAspectRatio } from "@/lib/fal";
 import { openaiEdit, OpenAIImageError } from "@/lib/openai";
 import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import { resolutionTier, Provider, TWILIGHT_SKIES } from "@/lib/config";
@@ -172,6 +172,12 @@ export async function POST(req: NextRequest) {
     imageUrls.push(...referenceImages);
   }
 
+  // Force the model's output canvas to match the source photo's own shape
+  // (width/height are the ORIGINAL pre-downscale dimensions) instead of
+  // letting it default to a generic ratio, which was stretching/cropping
+  // unusual shapes like wide drone photos.
+  const aspectRatio = nearestFalAspectRatio(width, height);
+
   try {
         const outputUrl =
                 provider === "openai"
@@ -180,6 +186,7 @@ export async function POST(req: NextRequest) {
                                 prompt,
                                 imageUrls,
                                 resolution: resolutionTier(),
+                                aspectRatio,
                   });
         return NextResponse.json({ url: outputUrl });
   } catch (err) {

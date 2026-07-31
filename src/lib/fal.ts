@@ -26,8 +26,51 @@ export interface FalEditParams {
   imageUrls: string[];
   /** FAL resolution tier — "2K" or "4K". */
   resolution: "2K" | "4K";
+  /**
+   * The output canvas shape, as one of FAL's enum values (see
+   * FAL_ASPECT_RATIOS). Left unset (→ "auto") lets the model pick, which in
+   * practice sometimes stretches/crops unusual input shapes (e.g. wide drone
+   * photos) to a generic ratio — pass the value from nearestFalAspectRatio()
+   * to force the output to match the input photo's own shape instead.
+   */
+  aspectRatio?: string;
   /** Optional override of the model id. Defaults to config FAL_MODEL. */
   model?: string;
+}
+
+/** FAL's supported aspect_ratio enum values for nano-banana-pro/edit. */
+export const FAL_ASPECT_RATIOS = [
+  "21:9",
+  "16:9",
+  "3:2",
+  "4:3",
+  "5:4",
+  "1:1",
+  "4:5",
+  "3:4",
+  "2:3",
+  "9:16",
+] as const;
+
+/**
+ * Pick the FAL aspect_ratio enum value closest to a photo's real width/height,
+ * so the model's output canvas matches the input shape instead of defaulting
+ * to a generic ratio. Returns "auto" if dimensions aren't known.
+ */
+export function nearestFalAspectRatio(width?: number, height?: number): string {
+  if (!width || !height || width <= 0 || height <= 0) return "auto";
+  const target = Math.log(width / height);
+  let best: string = "auto";
+  let bestDiff = Infinity;
+  for (const ratio of FAL_ASPECT_RATIOS) {
+    const [w, h] = ratio.split(":").map(Number);
+    const diff = Math.abs(Math.log(w / h) - target);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = ratio;
+    }
+  }
+  return best;
 }
 
 /**
@@ -55,6 +98,7 @@ export async function falEdit(params: FalEditParams): Promise<string> {
     prompt: params.prompt,
     image_urls: params.imageUrls,
     resolution: params.resolution,
+    aspect_ratio: params.aspectRatio ?? "auto",
     num_images: 1,
   };
 

@@ -322,6 +322,17 @@ export function buildPrompt(
     base = base + "\n\n" + MATCH_CONSISTENCY_ADDENDUM;
   }
 
+  // Every job's output canvas must match the input photo's own aspect ratio
+  // by default — this is enforced technically too (see nearestFalAspectRatio
+  // in fal.ts, which sets FAL's aspect_ratio parameter explicitly instead of
+  // leaving it on "auto"), but the instruction is repeated here as a second
+  // layer since the model can still crop/pad within a canvas. The Prompt tab
+  // gets this appended too so it stays the default, but a custom prompt or
+  // note asking for a specific crop/ratio should still win.
+  base =
+    base +
+    "\n\nPreserve the exact original aspect ratio and framing of the input photograph — do not crop, stretch, squeeze, letterbox, pad, or otherwise change the image's proportions, unless explicitly instructed otherwise above.";
+
   const trimmed = note?.trim();
   if (!trimmed) return base;
   return (
