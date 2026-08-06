@@ -88,6 +88,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("declutter");
   const [activeMode, setActiveMode] = useState<Mode>("interior");
   const [enhanceProvider, setEnhanceProvider] = useState<Provider>("fal");
+  const [declutterProvider, setDeclutterProvider] = useState<Provider>("fal");
   const [twilightSky, setTwilightSky] = useState<TwilightSky>("orange");
   const [twilightStyle, setTwilightStyle] = useState<TwilightStyle>("natural");
   const [twilightScene, setTwilightScene] = useState<TwilightScene>("dusk");
@@ -231,7 +232,13 @@ export default function Home() {
       if (tab === "general" && !trimmedGeneralPrompt) return;
 
       const provider =
-        tab === "enhance" ? enhanceProvider : tab === "general" ? generalProvider : undefined;
+        tab === "enhance"
+          ? enhanceProvider
+          : tab === "general"
+            ? generalProvider
+            : tab === "declutter"
+              ? declutterProvider
+              : undefined;
 
       // Prompt tab: any attached reference photos ride along in the same
       // request as the main photo, so the main photo gets a smaller budget
@@ -301,7 +308,7 @@ export default function Home() {
         runBatch(ready);
       }
     },
-    [runBatch, activeTab, activeMode, enhanceProvider, twilightSky, twilightStyle, twilightScene, declutterIntensity, enhanceType, generalProvider, generalPrompt, generalReferences]
+    [runBatch, activeTab, activeMode, enhanceProvider, declutterProvider, twilightSky, twilightStyle, twilightScene, declutterIntensity, enhanceType, generalProvider, generalPrompt, generalReferences]
   );
 
   const onDrop = useCallback(
@@ -443,7 +450,8 @@ export default function Home() {
 
   const costHint =
     (activeTab === "enhance" && enhanceProvider === "openai") ||
-    (activeTab === "general" && generalProvider === "openai")
+    (activeTab === "general" && generalProvider === "openai") ||
+    (activeTab === "declutter" && declutterProvider === "openai")
       ? OPENAI_COST_HINT
       : COST_HINT;
 
@@ -609,19 +617,28 @@ export default function Home() {
             </div>
           )}
 
-          {/* Enhance / Prompt tabs: model selector. Each tab remembers its
-              own last-picked provider (enhanceProvider vs generalProvider)
-              rather than sharing one, so switching tabs doesn't surprise you. */}
-          {(activeTab === "enhance" || activeTab === "general") && (
+          {/* Declutter / Enhance / Prompt tabs: model selector. Each tab
+              remembers its own last-picked provider (declutterProvider vs
+              enhanceProvider vs generalProvider) rather than sharing one, so
+              switching tabs doesn't surprise you. */}
+          {(activeTab === "declutter" || activeTab === "enhance" || activeTab === "general") && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Model:</span>
               <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
                 <button
                   onClick={() =>
-                    activeTab === "enhance" ? setEnhanceProvider("fal") : setGeneralProvider("fal")
+                    activeTab === "declutter"
+                      ? setDeclutterProvider("fal")
+                      : activeTab === "enhance"
+                        ? setEnhanceProvider("fal")
+                        : setGeneralProvider("fal")
                   }
                   className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                    (activeTab === "enhance" ? enhanceProvider : generalProvider) === "fal"
+                    (activeTab === "declutter"
+                      ? declutterProvider
+                      : activeTab === "enhance"
+                        ? enhanceProvider
+                        : generalProvider) === "fal"
                       ? "bg-white text-neutral-900 shadow-sm"
                       : "text-neutral-500 hover:text-neutral-800"
                   }`}
@@ -630,12 +647,18 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() =>
-                    activeTab === "enhance"
-                      ? setEnhanceProvider("openai")
-                      : setGeneralProvider("openai")
+                    activeTab === "declutter"
+                      ? setDeclutterProvider("openai")
+                      : activeTab === "enhance"
+                        ? setEnhanceProvider("openai")
+                        : setGeneralProvider("openai")
                   }
                   className={`rounded-md px-3 py-1 text-xs font-medium transition ${
-                    (activeTab === "enhance" ? enhanceProvider : generalProvider) === "openai"
+                    (activeTab === "declutter"
+                      ? declutterProvider
+                      : activeTab === "enhance"
+                        ? enhanceProvider
+                        : generalProvider) === "openai"
                       ? "bg-white text-neutral-900 shadow-sm"
                       : "text-neutral-500 hover:text-neutral-800"
                   }`}
