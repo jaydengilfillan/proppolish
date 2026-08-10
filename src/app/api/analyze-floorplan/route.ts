@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeFloorplanScan, FloorplanVisionError } from "@/lib/floorplanVision";
+import { recordUsage, FLOORPLAN_SCAN_ESTIMATED_COST } from "@/lib/usage";
 
 // Vision analysis of a full-resolution diagram can take a while.
 export const maxDuration = 120;
@@ -45,6 +46,14 @@ export async function POST(req: NextRequest) {
       scanImageDataUri: body.scanImage,
       droneImageDataUri: droneImage,
     });
+    const username = req.headers.get("x-pp-user");
+    if (username) {
+      void recordUsage(username, {
+        tab: "floorplan_scan",
+        cost: FLOORPLAN_SCAN_ESTIMATED_COST,
+        at: Date.now(),
+      });
+    }
     return NextResponse.json(analysis);
   } catch (err) {
     if (err instanceof FloorplanVisionError) {

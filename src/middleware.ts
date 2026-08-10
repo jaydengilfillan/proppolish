@@ -23,7 +23,19 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const username = secret ? await verifySession(token, secret) : null;
 
-  if (username) return NextResponse.next();
+  if (username) {
+    // Forward the verified username to route handlers as a request header
+    // (x-pp-user) so they know who's calling without re-verifying the
+    // cookie themselves — used by usage tracking (see src/lib/usage.ts) to
+    // attribute each job's cost to the right user. Safe from spoofing: we
+    // copy the incoming headers and then unconditionally overwrite
+    // x-pp-user with the value we just verified from the signed session
+    // cookie, so any x-pp-user a client tried to send themselves is
+    // discarded before the route handler ever sees it.
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-pp-user", username);
+    return NextResponse.next({ request: { headers: requestHeaders } });
+  }
 
   // Fail CLOSED: if AUTH_SECRET isn't set yet (e.g. mid-setup), nobody gets
   // in rather than nobody being gated. The /login page's own submit will

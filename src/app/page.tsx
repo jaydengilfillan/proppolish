@@ -25,6 +25,8 @@ import HdrBlend from "@/components/HdrBlend";
 import RoomMatch from "@/components/RoomMatch";
 import FloorPlan from "@/components/FloorPlan";
 import Notes from "@/components/Notes";
+import UsageAdmin from "@/components/UsageAdmin";
+import UsageCredits from "@/components/UsageCredits";
 
 // How many images to process at once. Keeps the FAL account inside sane limits
 // while still working through a 30-image batch quickly.
@@ -80,7 +82,7 @@ const MODE_LABEL: Record<Mode, string> = {
  * tucked in the header's top-right corner since it's a utility, not a tab
  * in the main Declutter/Enhance/.../Prompt workflow.
  */
-type View = "process" | "hdr" | "match" | "floorplan" | "notes";
+type View = "process" | "hdr" | "match" | "floorplan" | "notes" | "usage";
 
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -95,6 +97,7 @@ export default function Home() {
   const [declutterIntensity, setDeclutterIntensity] = useState<DeclutterIntensity>("heavy");
   const [enhanceType, setEnhanceType] = useState<EnhanceType>("standard");
   const [username, setUsername] = useState<string | null>(null);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const [generalProvider, setGeneralProvider] = useState<Provider>("fal");
   const [generalPrompt, setGeneralPrompt] = useState("");
   // Prompt tab: up to 2 optional style/content reference photos, attached
@@ -436,8 +439,14 @@ export default function Home() {
   useEffect(() => {
     fetch("/api/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { username?: string } | null) => setUsername(d?.username ?? null))
-      .catch(() => setUsername(null));
+      .then((d: { username?: string; isAdmin?: boolean } | null) => {
+        setUsername(d?.username ?? null);
+        setIsAdminUser(d?.isAdmin ?? false);
+      })
+      .catch(() => {
+        setUsername(null);
+        setIsAdminUser(false);
+      });
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -466,6 +475,7 @@ export default function Home() {
           <p className="text-sm text-neutral-500">{APP_TAGLINE}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {!isAdminUser && <UsageCredits />}
           {username && (
             <span className="hidden text-xs text-neutral-400 sm:inline">
               Signed in as {username}
@@ -477,6 +487,18 @@ export default function Home() {
           >
             Log out
           </button>
+          {isAdminUser && (
+            <button
+              onClick={() => setView("usage")}
+              className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                view === "usage"
+                  ? "bg-neutral-900 text-white"
+                  : "border border-neutral-300 text-neutral-500 hover:text-neutral-800"
+              }`}
+            >
+              Usage
+            </button>
+          )}
           <button
             onClick={() => setView("notes")}
             className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition ${
@@ -590,6 +612,11 @@ export default function Home() {
       <div style={{ display: view === "notes" ? "block" : "none" }}>
         <Notes onUseInPrompt={handleUseNotePrompt} />
       </div>
+      {isAdminUser && (
+        <div style={{ display: view === "usage" ? "block" : "none" }}>
+          <UsageAdmin />
+        </div>
+      )}
       <div style={{ display: view === "process" ? "block" : "none" }}>
         <>
           {/* Enhance tab: type selector. Standard is the usual mode-based

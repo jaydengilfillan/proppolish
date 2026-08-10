@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth";
+import { isAdmin } from "@/lib/usage";
 
 export const dynamic = "force-dynamic";
 
@@ -10,5 +11,5 @@ export async function GET(req: NextRequest) {
   if (!username) {
     return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
   }
-  return NextResponse.json({ username });
+  return NextResponse.json({ username, isAdmin: isAdmin(username) });
 }

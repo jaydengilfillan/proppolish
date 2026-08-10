@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError, nearestFalAspectRatio } from "@/lib/fal";
 import { openaiEdit, OpenAIImageError } from "@/lib/openai";
 import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
-import { resolutionTier, Provider, TWILIGHT_SKIES } from "@/lib/config";
+import { resolutionTier, costPerImage, Provider, TWILIGHT_SKIES } from "@/lib/config";
+import { recordUsage, OPENAI_ESTIMATED_COST, UsageTab } from "@/lib/usage";
 
 // This route calls the model provider synchronously. FAL is usually fast
 // (10-20s) but OpenAI gpt-image-2 at "high" quality on a full 4K exterior
@@ -188,6 +189,21 @@ export async function POST(req: NextRequest) {
                                 resolution: resolutionTier(),
                                 aspectRatio,
                   });
+
+        // Usage tracking: attribute this job's estimated cost to whoever is
+        // logged in (see middleware.ts's x-pp-user header). Fire-and-forget —
+        // never let a usage-logging hiccup slow down or fail a real result.
+        const username = req.headers.get("x-pp-user");
+        if (username) {
+          void recordUsage(username, {
+            tab: tab as UsageTab,
+            mode,
+            provider,
+            cost: provider === "openai" ? OPENAI_ESTIMATED_COST : costPerImage(),
+            at: Date.now(),
+          });
+        }
+
         return NextResponse.json({ url: outputUrl });
   } catch (err) {
         if (err instanceof FalError || err instanceof OpenAIImageError) {
