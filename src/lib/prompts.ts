@@ -285,6 +285,20 @@ export const OPENAI_DETAIL_PRESERVATION_INSTRUCTION = `Preserve fine detail ever
 export const OPENAI_FOLIAGE_DETAIL_INSTRUCTION = `Pay special attention to trees, shrubs, hedges and other foliage in the frame. Render individual leaves, needles, fronds and blossom clusters with real, distinct texture — matching what's visible in the original photo — instead of collapsing them into smooth, painterly, or blobby masses of colour. Conifers and weeping/pendulous trees should keep their individual hanging needle clusters, palms should keep distinct separate fronds, and flowering trees (e.g. wattle, jacaranda) should keep individual blossom texture rather than becoming a flat blob of colour. This matters just as much as the hard-surface detail (brick, roofing, trim) already called out above — foliage should never look softer or less detailed than the rest of the image.`;
 
 /**
+ * Appended alongside the other OpenAI-only instructions for every OpenAI
+ * job, every tab. gpt-image-2 regenerates regions of the image rather than
+ * editing pixels surgically (the same root cause behind the blur/foliage
+ * fixes above), and text is especially vulnerable to that — house numbers,
+ * letterbox numbers, and building/business signage have been observed
+ * coming back altered (e.g. a building name changed to a different name)
+ * or misspelled. Nano Banana (FAL) doesn't show this behaviour. This is a
+ * legal/liability concern as much as a quality one — changing a real
+ * address number or business name is a factual error in a real estate
+ * listing image, not just an aesthetic slip.
+ */
+export const OPENAI_TEXT_PRESERVATION_INSTRUCTION = `Preserve every piece of visible text in the frame EXACTLY as it appears in the original photo — house numbers, letterbox/mailbox numbers, street signs, building names, business signage, logos, and any other lettering or numerals anywhere in the image. Do not change, reinterpret, regenerate, blur, misspell, restyle or invent any text, numbers or symbols. Whatever a number or word reads in the original photo, it must read exactly the same, with the same spelling and characters, in the result — this applies even if the text becomes partially obscured by a new light source or shadow elsewhere in the edit; the text itself must never be altered.`;
+
+/**
  * "Room Match" addendum — appended to a Restage prompt when a second image is
  * supplied: a reference photo of the SAME room, a different angle, already
  * staged/restaged. Used by the Room Match tool so multiple angles of one room
@@ -356,6 +370,7 @@ export function buildPrompt(
   if (provider === "openai") {
     base = base + "\n\n" + OPENAI_DETAIL_PRESERVATION_INSTRUCTION;
     base = base + "\n\n" + OPENAI_FOLIAGE_DETAIL_INSTRUCTION;
+    base = base + "\n\n" + OPENAI_TEXT_PRESERVATION_INSTRUCTION;
   }
 
   if (tab === "restage" && matchReference) {
