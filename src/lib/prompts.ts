@@ -252,6 +252,18 @@ Keep it fully photorealistic and believable — no over-processing, no HDR halos
 export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface textures visible in the frame — driveways, paths, gutters, downpipes, concrete and paving. Where they show dirt, staining, moss, algae, cracks or general blemishes, clean and refresh the texture/finish so it looks well maintained, using the SAME colour, material and style already present (e.g. concrete stays the same grey concrete — do not change it to pavers, a different colour, or a different material). Do not change the shape, layout, size or material type of these surfaces — texture and cleanliness only.`;
 
 /**
+ * Appended to EVERY job that uses the OpenAI (ChatGPT) provider, regardless
+ * of tab. gpt-image-2 tends to regenerate large areas of an edit rather than
+ * touching them surgically, and visibly loses fine high-frequency detail —
+ * distant buildings/skylines, small windows, foliage, architectural
+ * trim — when it does. Nano Banana (FAL) doesn't show this behaviour, which
+ * is why this is OpenAI-only. This is the fix for a recurring complaint:
+ * ChatGPT-provider results (especially busy aerial/skyline shots run through
+ * the unguarded Prompt tab) coming back softer/blurrier than the original.
+ */
+export const OPENAI_DETAIL_PRESERVATION_INSTRUCTION = `Preserve fine detail everywhere in the frame, especially in busy or complex areas — distant buildings, skylines, foliage, roofing, brickwork, and architectural trim. Do not blur, soften, smooth over, simplify, or regenerate these areas at lower fidelity than the rest of the image. Match the sharpness and level of detail of the original photograph as closely as possible: the result should never look softer, blurrier, or less detailed than the input — only cleaner and better lit, never lower resolution or less crisp.`;
+
+/**
  * "Room Match" addendum — appended to a Restage prompt when a second image is
  * supplied: a reference photo of the SAME room, a different angle, already
  * staged/restaged. Used by the Room Match tool so multiple angles of one room
@@ -316,6 +328,12 @@ export function buildPrompt(
 
   if (tab === "enhance" && enhanceType !== "night" && mode === "exterior" && provider === "openai") {
     base = base + "\n\n" + OPENAI_EXTERIOR_TEXTURE_INSTRUCTION;
+  }
+
+  // Every OpenAI-provider job, on every tab (Declutter/Enhance/Prompt), gets
+  // this — the softening behaviour it's fixing isn't specific to any one tab.
+  if (provider === "openai") {
+    base = base + "\n\n" + OPENAI_DETAIL_PRESERVATION_INSTRUCTION;
   }
 
   if (tab === "restage" && matchReference) {
