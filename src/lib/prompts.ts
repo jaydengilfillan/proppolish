@@ -264,6 +264,18 @@ export const OPENAI_EXTERIOR_TEXTURE_INSTRUCTION = `Also inspect hard surface te
 export const OPENAI_DETAIL_PRESERVATION_INSTRUCTION = `Preserve fine detail everywhere in the frame, especially in busy or complex areas — distant buildings, skylines, foliage, roofing, brickwork, and architectural trim. Do not blur, soften, smooth over, simplify, or regenerate these areas at lower fidelity than the rest of the image. Match the sharpness and level of detail of the original photograph as closely as possible: the result should never look softer, blurrier, or less detailed than the input — only cleaner and better lit, never lower resolution or less crisp.`;
 
 /**
+ * Appended alongside OPENAI_DETAIL_PRESERVATION_INSTRUCTION for every OpenAI
+ * job. That instruction alone wasn't enough on heavily-landscaped exterior
+ * shots: brick, roofing and hard architecture came out crisp, but conifers,
+ * palms and flowering trees (e.g. wattle) were still coming back as soft,
+ * painterly blobs with no individual needle/frond/blossom structure —
+ * gpt-image-2 visibly regenerates dense organic texture at lower fidelity
+ * even when told generically not to blur. This names the failure mode
+ * directly instead of relying on the generic instruction to cover it.
+ */
+export const OPENAI_FOLIAGE_DETAIL_INSTRUCTION = `Pay special attention to trees, shrubs, hedges and other foliage in the frame. Render individual leaves, needles, fronds and blossom clusters with real, distinct texture — matching what's visible in the original photo — instead of collapsing them into smooth, painterly, or blobby masses of colour. Conifers and weeping/pendulous trees should keep their individual hanging needle clusters, palms should keep distinct separate fronds, and flowering trees (e.g. wattle, jacaranda) should keep individual blossom texture rather than becoming a flat blob of colour. This matters just as much as the hard-surface detail (brick, roofing, trim) already called out above — foliage should never look softer or less detailed than the rest of the image.`;
+
+/**
  * "Room Match" addendum — appended to a Restage prompt when a second image is
  * supplied: a reference photo of the SAME room, a different angle, already
  * staged/restaged. Used by the Room Match tool so multiple angles of one room
@@ -334,6 +346,7 @@ export function buildPrompt(
   // this — the softening behaviour it's fixing isn't specific to any one tab.
   if (provider === "openai") {
     base = base + "\n\n" + OPENAI_DETAIL_PRESERVATION_INSTRUCTION;
+    base = base + "\n\n" + OPENAI_FOLIAGE_DETAIL_INSTRUCTION;
   }
 
   if (tab === "restage" && matchReference) {
