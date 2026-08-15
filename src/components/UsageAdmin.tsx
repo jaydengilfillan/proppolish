@@ -15,6 +15,7 @@ interface HistoryEntry {
   provider?: string;
   cost: number;
   at: number;
+  imageUrl?: string;
 }
 
 interface AdminUsageResponse {
@@ -125,6 +126,7 @@ export default function UsageAdmin() {
             <table className="w-full text-left text-sm">
               <thead className="bg-neutral-50 text-xs text-neutral-500">
                 <tr>
+                  <th className="px-3 py-2 font-medium">Image</th>
                   <th className="px-3 py-2 font-medium">When</th>
                   <th className="px-3 py-2 font-medium">User</th>
                   <th className="px-3 py-2 font-medium">Tool</th>
@@ -135,13 +137,28 @@ export default function UsageAdmin() {
               <tbody>
                 {data.history.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-3 py-4 text-center text-neutral-400">
+                    <td colSpan={6} className="px-3 py-4 text-center text-neutral-400">
                       No activity logged yet.
                     </td>
                   </tr>
                 )}
                 {data.history.map((h, i) => (
                   <tr key={i} className="border-t border-neutral-100">
+                    <td className="px-3 py-2">
+                      {h.imageUrl ? (
+                        <a href={h.imageUrl} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={h.imageUrl}
+                            alt="Result"
+                            className="h-10 w-10 rounded object-cover ring-1 ring-neutral-200 transition hover:opacity-80"
+                          />
+                        </a>
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded bg-neutral-100 text-[10px] text-neutral-400">
+                          n/a
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-neutral-500">
                       {new Date(h.at).toLocaleString()}
                     </td>

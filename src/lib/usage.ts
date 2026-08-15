@@ -33,6 +33,16 @@ export interface UsageEntry {
   provider?: string;
   cost: number;
   at: number; // epoch ms
+  /**
+   * URL to the actual output image, so the admin Usage view can show/link to
+   * it. For FAL jobs this is FAL's own hosted result URL (no extra upload
+   * needed). For OpenAI jobs there's no hosted URL — the API returns raw
+   * image bytes — so this is a copy uploaded to Vercel Blob storage
+   * (see src/lib/blob.ts). Undefined if the upload failed or wasn't
+   * attempted (e.g. Blob storage isn't configured); the log entry still
+   * records fine either way, it just won't have a thumbnail.
+   */
+  imageUrl?: string;
 }
 
 // A rough, non-metered estimate for OpenAI jobs — OpenAI bills gpt-image-2

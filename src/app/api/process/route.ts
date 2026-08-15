@@ -4,6 +4,7 @@ import { openaiEdit, OpenAIImageError } from "@/lib/openai";
 import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import { resolutionTier, costPerImage, Provider, TWILIGHT_SKIES } from "@/lib/config";
 import { recordUsage, OPENAI_ESTIMATED_COST, UsageTab } from "@/lib/usage";
+import { uploadUsageImage } from "@/lib/blob";
 
 // This route calls the model provider synchronously. FAL is usually fast
 // (10-20s) but OpenAI gpt-image-2 at "high" quality on a full 4K exterior
@@ -192,16 +193,29 @@ export async function POST(req: NextRequest) {
 
         // Usage tracking: attribute this job's estimated cost to whoever is
         // logged in (see middleware.ts's x-pp-user header). Fire-and-forget —
-        // never let a usage-logging hiccup slow down or fail a real result.
+        // never let a usage-logging hiccup slow down or fail a real result,
+        // or delay handing the finished image back to the browser.
         const username = req.headers.get("x-pp-user");
         if (username) {
-          void recordUsage(username, {
-            tab: tab as UsageTab,
-            mode,
-            provider,
-            cost: provider === "openai" ? OPENAI_ESTIMATED_COST : costPerImage(),
-            at: Date.now(),
-          });
+          void (async () => {
+            // FAL already hosts its result at a real URL — link straight to
+            // it. OpenAI returns raw image bytes with nothing hosted
+            // anywhere, so make our own copy in Blob storage or there'd be
+            // no way to ever see this result again after the tab closes.
+            const imageUrl =
+              provider === "fal"
+                ? outputUrl
+                : (await uploadUsageImage(outputUrl, `${username}-${Date.now()}`)) ?? undefined;
+
+            await recordUsage(username, {
+              tab: tab as UsageTab,
+              mode,
+              provider,
+              cost: provider === "openai" ? OPENAI_ESTIMATED_COST : costPerImage(),
+              at: Date.now(),
+              imageUrl,
+            });
+          })().catch((err) => console.error("usage tracking failed (non-fatal):", err));
         }
 
         return NextResponse.json({ url: outputUrl });
