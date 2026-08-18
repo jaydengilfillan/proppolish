@@ -40,21 +40,28 @@ export default function UsageCredits() {
     return null;
   }
 
-  const pct = weeklyAllowance > 0 ? Math.min(100, (weeklyTotal / weeklyAllowance) * 100) : 0;
+  const pctRaw = weeklyAllowance > 0 ? (weeklyTotal / weeklyAllowance) * 100 : 0;
+  const pct = Math.min(100, pctRaw);
   const remaining = Math.max(0, weeklyAllowance - weeklyTotal);
-  const colour = pct >= 100 ? "text-red-600" : pct >= 80 ? "text-amber-600" : "text-neutral-500";
+
+  // Health-bar style gradient: full green (hue 120) when nothing's been
+  // spent yet, sliding through yellow/amber and down to full red (hue 0)
+  // as the week's allowance gets used up. Clamp the pct used for the colour
+  // calc to 100 so it settles on solid red once over budget, rather than
+  // wrapping back around the colour wheel.
+  const hue = 120 - (Math.min(100, pctRaw) / 100) * 120;
+  const barColour = `hsl(${hue}, 75%, 45%)`;
+  const textColour = `hsl(${hue}, 70%, 38%)`;
 
   return (
     <div className="hidden flex-col items-end gap-0.5 sm:flex" title="Your credits reset weekly">
-      <span className={`text-xs font-medium ${colour}`}>
+      <span className="text-xs font-medium" style={{ color: textColour }}>
         ${remaining.toFixed(2)} credits left this week
       </span>
       <div className="h-1 w-24 overflow-hidden rounded-full bg-neutral-100">
         <div
-          className={`h-full rounded-full ${
-            pct >= 100 ? "bg-red-500" : pct >= 80 ? "bg-amber-500" : "bg-neutral-900"
-          }`}
-          style={{ width: `${pct}%` }}
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, backgroundColor: barColour }}
         />
       </div>
     </div>
