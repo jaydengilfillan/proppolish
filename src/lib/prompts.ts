@@ -299,6 +299,28 @@ export const OPENAI_FOLIAGE_DETAIL_INSTRUCTION = `Pay special attention to trees
 export const OPENAI_TEXT_PRESERVATION_INSTRUCTION = `Preserve every piece of visible text in the frame EXACTLY as it appears in the original photo — house numbers, letterbox/mailbox numbers, street signs, building names, business signage, logos, and any other lettering or numerals anywhere in the image. Do not change, reinterpret, regenerate, blur, misspell, restyle or invent any text, numbers or symbols. Whatever a number or word reads in the original photo, it must read exactly the same, with the same spelling and characters, in the result — this applies even if the text becomes partially obscured by a new light source or shadow elsewhere in the edit; the text itself must never be altered.`;
 
 /**
+ * Appended alongside the other OpenAI-only instructions for every OpenAI
+ * job, every tab. Diagnosed on a Declutter-tab kitchen photo: the blank
+ * wall above the fridge, perfectly smooth in the original, came back with
+ * an invented mottled/blotchy grain — the opposite failure to the blur
+ * fixes above (fabricating texture instead of losing it). Interior
+ * declutter/enhance jobs are mostly flat painted surfaces, so this matters
+ * as much there as detail preservation matters for busy exteriors.
+ */
+export const OPENAI_SMOOTH_SURFACE_INSTRUCTION = `Flat painted surfaces — walls, ceilings, doors, skirting boards, cabinetry — must stay exactly as smooth and clean as they are in the original photo. Do not add any grain, noise, mottling, blotchiness, stucco-like texture, or surface variation that isn't genuinely present in the original photograph. A perfectly smooth painted wall must still look like a perfectly smooth painted wall in the result — flat, even and clean — never textured, grainy, or patchy. This applies everywhere in the frame, not just the main subject being edited.`;
+
+/**
+ * Appended alongside the other OpenAI-only instructions for every OpenAI
+ * job, every tab. Same diagnosed photo as OPENAI_SMOOTH_SURFACE_INSTRUCTION:
+ * the corrugated pergola roofing and string lights visible through a
+ * kitchen window came back smeared/blurred, losing fine detail, even
+ * though OPENAI_DETAIL_PRESERVATION_INSTRUCTION already exists — that one
+ * doesn't explicitly call out views seen through glass, which the model
+ * apparently treats as fair game to soften. Naming it directly.
+ */
+export const OPENAI_WINDOW_VIEW_DETAIL_INSTRUCTION = `Anything visible through a window, glass door, or other glazing — roofing, pergola beams, outdoor furniture, landscaping, string lights, neighbouring buildings — must stay just as sharp and detailed as it is in the original photo. Do not blur, soften, or simplify what's visible through glass just because it's seen through a reflective or semi-transparent surface. Fine details like corrugated roofing ribs, individual light fixtures, and architectural trim seen through a window must remain crisp, not smeared, hazy, or lost.`;
+
+/**
  * "Room Match" addendum — appended to a Restage prompt when a second image is
  * supplied: a reference photo of the SAME room, a different angle, already
  * staged/restaged. Used by the Room Match tool so multiple angles of one room
@@ -371,6 +393,8 @@ export function buildPrompt(
     base = base + "\n\n" + OPENAI_DETAIL_PRESERVATION_INSTRUCTION;
     base = base + "\n\n" + OPENAI_FOLIAGE_DETAIL_INSTRUCTION;
     base = base + "\n\n" + OPENAI_TEXT_PRESERVATION_INSTRUCTION;
+    base = base + "\n\n" + OPENAI_SMOOTH_SURFACE_INSTRUCTION;
+    base = base + "\n\n" + OPENAI_WINDOW_VIEW_DETAIL_INSTRUCTION;
   }
 
   if (tab === "restage" && matchReference) {
