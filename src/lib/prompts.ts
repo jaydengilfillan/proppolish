@@ -321,6 +321,19 @@ export const OPENAI_SMOOTH_SURFACE_INSTRUCTION = `Flat painted surfaces — wall
 export const OPENAI_WINDOW_VIEW_DETAIL_INSTRUCTION = `Anything visible through a window, glass door, or other glazing — roofing, pergola beams, outdoor furniture, landscaping, string lights, neighbouring buildings — must stay just as sharp and detailed as it is in the original photo. Do not blur, soften, or simplify what's visible through glass just because it's seen through a reflective or semi-transparent surface. Fine details like corrugated roofing ribs, individual light fixtures, and architectural trim seen through a window must remain crisp, not smeared, hazy, or lost.`;
 
 /**
+ * Appended for every FAL (Nano Banana) job, every tab — the FAL equivalent
+ * of the OpenAI-only instructions above. Nano Banana doesn't show the
+ * blur/regeneration behaviour gpt-image-2 does, but it has its own
+ * recurring failure mode: a warm/pink/magenta colour cast pushed across
+ * the whole image, especially noticeable on whites and neutrals. The base
+ * prompts already have generic "no pink tint" language in their DO-NOT
+ * sections, but that's shared with OpenAI and evidently isn't strong or
+ * specific enough on its own to stop FAL doing this reliably — same
+ * lesson as the eave-lights fix: name the exact failure mode.
+ */
+export const FAL_COLOR_ACCURACY_INSTRUCTION = `Match the original photo's own colour temperature and white balance as closely as possible. Do not introduce a warm, pink, magenta, or peachy colour cast anywhere in the image — this is a specific failure mode to actively guard against, not a generic reminder. White and off-white surfaces (walls, ceilings, trim, appliances, benchtops) must stay a true, neutral white in the result, not shift blush pink or rosy; grey surfaces must stay grey, not warm/pink. Before finishing, compare the overall colour balance of the result to the original photo: if the result looks even slightly tinted pink, magenta, or unusually warm compared to the original's true colours, that is wrong — correct it back to match the original's real colour balance. Only cleanliness, lighting and sharpness should improve; the underlying colour of every surface must stay true to what the camera actually captured.`;
+
+/**
  * "Room Match" addendum — appended to a Restage prompt when a second image is
  * supplied: a reference photo of the SAME room, a different angle, already
  * staged/restaged. Used by the Room Match tool so multiple angles of one room
@@ -395,6 +408,12 @@ export function buildPrompt(
     base = base + "\n\n" + OPENAI_TEXT_PRESERVATION_INSTRUCTION;
     base = base + "\n\n" + OPENAI_SMOOTH_SURFACE_INSTRUCTION;
     base = base + "\n\n" + OPENAI_WINDOW_VIEW_DETAIL_INSTRUCTION;
+  }
+
+  // Every FAL-provider job, on every tab — FAL's recurring failure mode is
+  // a warm/pink colour cast rather than the blur/regeneration OpenAI shows.
+  if (provider === "fal") {
+    base = base + "\n\n" + FAL_COLOR_ACCURACY_INSTRUCTION;
   }
 
   if (tab === "restage" && matchReference) {
