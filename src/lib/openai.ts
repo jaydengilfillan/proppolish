@@ -46,23 +46,43 @@ export async function openaiEdit(params: OpenAIEditParams): Promise<string> {
                 );
     }
 
-  const size = computeOpenAiSize(params.width, params.height);
+  const imageBlob = dataUriToBlob(params.imageDataUri);
+    const size = computeOpenAiSize(params.width, params.height);
 
-  // input_fidelity: "high" tells the model to preserve everything in the
-  // source photo it isn't specifically asked to change — this is the
-  // official OpenAI-documented lever for exactly the problem we kept
-  // hitting: without it, the model treats the WHOLE frame as fair game to
-  // regenerate, so even untouched areas (floors, appliances, fine texture)
-  // come back visibly softer than the original. With it, only the parts of
-  // the image that actually need to change (removed clutter, relit windows,
-  // a genuinely fabricated wall texture) are meaningfully altered, and
-  // everything else stays much closer to the source photo's real detail.
-  // Falls back to a retry without it if a given account/model combination
-  // rejects the parameter, so this never blocks a real generation.
-  let resp = await requestOpenAiEdit(key, params, size, true);
+  const form = new FormData();
+    form.append("model", OPENAI_MODEL);
+    form.append("prompt", params.prompt);
+    form.append("quality", OPENAI_QUALITY);
+    form.append("size", size);
+    const references = params.referenceImages ?? [];
+    if (references.length > 0) {
+          // gpt-image-2's edit endpoint accepts an ARRAY of images (up to 16)
+          // via repeated "image[]" fields when more than one is sent — the
+          // main photo plus any Prompt-tab reference images the user attached.
+          form.append("image[]", imageBlob, "input.jpg");
+          references.forEach((dataUri, i) => {
+                  form.append("image[]", dataUriToBlob(dataUri), `reference-${i}.jpg`);
+          });
+    } else {
+          // Unchanged single-image path used by every other tab.
+          form.append("image", imageBlob, "input.jpg");
+    }
+
+  let resp: Response;
+    try {
+          resp = await fetch("https://api.openai.com/v1/images/edits", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${key}` },
+                  body: form,
+          });
+    } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err);
+          throw new OpenAIImageError(502, `Could not reach OpenAI: ${detail}`);
+    }
+
+  const text = await resp.text();
 
   if (!resp.ok) {
-        const text = await resp.text();
         let message = text;
         try {
                 const parsed = JSON.parse(text);
@@ -70,25 +90,8 @@ export async function openaiEdit(params: OpenAIEditParams): Promise<string> {
         } catch {
                 /* keep raw text */
         }
-        if (resp.status === 400 && /input_fidelity/i.test(message)) {
-              resp = await requestOpenAiEdit(key, params, size, false);
-              if (!resp.ok) {
-                    const retryText = await resp.text();
-                    let retryMessage = retryText;
-                    try {
-                          const parsed = JSON.parse(retryText);
-                          retryMessage = parsed?.error?.message || retryText;
-                    } catch {
-                          /* keep raw text */
-                    }
-                    throw new OpenAIImageError(resp.status, retryMessage || `OpenAI returned HTTP ${resp.status}`);
-              }
-        } else {
-              throw new OpenAIImageError(resp.status, message || `OpenAI returned HTTP ${resp.status}`);
-        }
+        throw new OpenAIImageError(resp.status, message || `OpenAI returned HTTP ${resp.status}`);
   }
-
-  const text = await resp.text();
 
   let json: unknown;
     try {
@@ -102,47 +105,6 @@ export async function openaiEdit(params: OpenAIEditParams): Promise<string> {
           throw new OpenAIImageError(502, "OpenAI response did not contain image data.");
     }
     return `data:image/png;base64,${b64}`;
-}
-
-async function requestOpenAiEdit(
-  key: string,
-  params: OpenAIEditParams,
-  size: string,
-  withInputFidelity: boolean
-): Promise<Response> {
-  const imageBlob = dataUriToBlob(params.imageDataUri);
-  const form = new FormData();
-  form.append("model", OPENAI_MODEL);
-  form.append("prompt", params.prompt);
-  form.append("quality", OPENAI_QUALITY);
-  form.append("size", size);
-  if (withInputFidelity) {
-    form.append("input_fidelity", "high");
-  }
-  const references = params.referenceImages ?? [];
-  if (references.length > 0) {
-    // gpt-image-2's edit endpoint accepts an ARRAY of images (up to 16)
-    // via repeated "image[]" fields when more than one is sent — the
-    // main photo plus any Prompt-tab reference images the user attached.
-    form.append("image[]", imageBlob, "input.jpg");
-    references.forEach((dataUri, i) => {
-      form.append("image[]", dataUriToBlob(dataUri), `reference-${i}.jpg`);
-    });
-  } else {
-    // Unchanged single-image path used by every other tab.
-    form.append("image", imageBlob, "input.jpg");
-  }
-
-  try {
-    return await fetch("https://api.openai.com/v1/images/edits", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}` },
-      body: form,
-    });
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    throw new OpenAIImageError(502, `Could not reach OpenAI: ${detail}`);
-  }
 }
 
 function dataUriToBlob(dataUri: string): Blob {

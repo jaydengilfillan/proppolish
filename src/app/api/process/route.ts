@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError, nearestFalAspectRatio } from "@/lib/fal";
 import { openaiEdit, OpenAIImageError } from "@/lib/openai";
-import { smoothFabricatedSurfaceGrainDataUri } from "@/lib/wallSmooth";
 import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
 import { resolutionTier, costPerImage, Provider, TWILIGHT_SKIES } from "@/lib/config";
 import { recordUsage, OPENAI_ESTIMATED_COST, UsageTab } from "@/lib/usage";
@@ -182,7 +181,7 @@ export async function POST(req: NextRequest) {
   const aspectRatio = nearestFalAspectRatio(width, height);
 
   try {
-        let outputUrl =
+        const outputUrl =
                 provider === "openai"
             ? await openaiEdit({ prompt, imageDataUri: body.image, width, height, referenceImages })
                   : await falEdit({
@@ -191,18 +190,6 @@ export async function POST(req: NextRequest) {
                                 resolution: resolutionTier(),
                                 aspectRatio,
                   });
-
-        // Deterministic, code-level safeguard against gpt-image-2's
-        // fabricated wall/ceiling grain (see wallSmooth.ts for the full
-        // history — this is v3, which measures flatness from the ORIGINAL
-        // source photo rather than the AI's own output, fixing the root
-        // cause of why v1/v2 over-smoothed real photos). Runs only on
-        // OpenAI-provider results, using the same source image that was
-        // sent to the model as the ground-truth reference. Falls back to
-        // the untouched output on any internal failure.
-        if (provider === "openai") {
-          outputUrl = await smoothFabricatedSurfaceGrainDataUri(body.image as string, outputUrl);
-        }
 
         // Usage tracking: attribute this job's estimated cost to whoever is
         // logged in (see middleware.ts's x-pp-user header). Fire-and-forget —
