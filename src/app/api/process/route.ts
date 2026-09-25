@@ -192,13 +192,23 @@ export async function POST(req: NextRequest) {
                                 aspectRatio,
                   });
 
-        // Deterministic, code-level safeguard against gpt-image-2's
-        // fabricated wall/ceiling grain — prompt wording alone couldn't
-        // reliably stop it (see wallSmooth.ts). Runs on every OpenAI result;
-        // falls back to the untouched output on any internal failure.
-        if (provider === "openai") {
-          outputUrl = await smoothFabricatedSurfaceGrainDataUri(outputUrl);
-        }
+        // TEMPORARILY DISABLED (2026-09-25): the flat-surface detection in
+        // wallSmooth.ts was calibrated against a Python/scipy prototype, but
+        // sharp's .blur() does not behave the same as scipy's
+        // gaussian_filter at the same sigma value — the ported thresholds
+        // ended up flagging huge, incorrect parts of real photos (floors,
+        // furniture, skin/faces on Prompt-tab portraits) as "flat wall" and
+        // smoothing them, producing a globally hazy/blurred result across
+        // the whole image rather than just fixing wall grain. Confirmed via
+        // direct user reports across multiple tabs before this was caught.
+        // Disabling the pass entirely until the flatness detection is
+        // rebuilt and validated against sharp's actual blur behaviour
+        // (rather than scipy's) on multiple real test photos. See
+        // wallSmooth.ts for the full post-mortem.
+        // if (provider === "openai") {
+        //   outputUrl = await smoothFabricatedSurfaceGrainDataUri(outputUrl);
+        // }
+        void smoothFabricatedSurfaceGrainDataUri; // keep import used while disabled
 
         // Usage tracking: attribute this job's estimated cost to whoever is
         // logged in (see middleware.ts's x-pp-user header). Fire-and-forget —
