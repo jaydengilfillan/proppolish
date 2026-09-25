@@ -192,23 +192,17 @@ export async function POST(req: NextRequest) {
                                 aspectRatio,
                   });
 
-        // TEMPORARILY DISABLED (2026-09-25): the flat-surface detection in
-        // wallSmooth.ts was calibrated against a Python/scipy prototype, but
-        // sharp's .blur() does not behave the same as scipy's
-        // gaussian_filter at the same sigma value — the ported thresholds
-        // ended up flagging huge, incorrect parts of real photos (floors,
-        // furniture, skin/faces on Prompt-tab portraits) as "flat wall" and
-        // smoothing them, producing a globally hazy/blurred result across
-        // the whole image rather than just fixing wall grain. Confirmed via
-        // direct user reports across multiple tabs before this was caught.
-        // Disabling the pass entirely until the flatness detection is
-        // rebuilt and validated against sharp's actual blur behaviour
-        // (rather than scipy's) on multiple real test photos. See
-        // wallSmooth.ts for the full post-mortem.
-        // if (provider === "openai") {
-        //   outputUrl = await smoothFabricatedSurfaceGrainDataUri(outputUrl);
-        // }
-        void smoothFabricatedSurfaceGrainDataUri; // keep import used while disabled
+        // Deterministic, code-level safeguard against gpt-image-2's
+        // fabricated wall/ceiling grain (see wallSmooth.ts for the full
+        // history — this is v3, which measures flatness from the ORIGINAL
+        // source photo rather than the AI's own output, fixing the root
+        // cause of why v1/v2 over-smoothed real photos). Runs only on
+        // OpenAI-provider results, using the same source image that was
+        // sent to the model as the ground-truth reference. Falls back to
+        // the untouched output on any internal failure.
+        if (provider === "openai") {
+          outputUrl = await smoothFabricatedSurfaceGrainDataUri(body.image as string, outputUrl);
+        }
 
         // Usage tracking: attribute this job's estimated cost to whoever is
         // logged in (see middleware.ts's x-pp-user header). Fire-and-forget —
