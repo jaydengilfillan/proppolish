@@ -306,32 +306,8 @@ export const OPENAI_TEXT_PRESERVATION_INSTRUCTION = `Preserve every piece of vis
  * fixes above (fabricating texture instead of losing it). Interior
  * declutter/enhance jobs are mostly flat painted surfaces, so this matters
  * as much there as detail preservation matters for busy exteriors.
- *
- * Two earlier versions of this instruction (a generic "keep walls smooth,
- * don't add texture" wording, then a slightly more detailed one) both
- * failed to reliably stop this on real re-tests — a pixel-level
- * post-processing pass was tried instead, but that ended up over-smoothing
- * or under-smoothing real photos in ways that were worse than the original
- * problem, so it was fully reverted. This version tries prompt wording
- * again, but structured completely differently: as an explicit two-branch
- * RULE (default: copy the wall forward exactly as photographed; only
- * clean it up if it's genuinely shadowed or marked) rather than a single
- * blanket "don't add texture" statement, on the theory that a generic
- * instruction gives the model no clear criterion for when it's "allowed"
- * to touch the wall at all, so it treats every wall as fair game the same
- * way it treats the rest of the frame. This is also why it's phrased as a
- * default of doing NOTHING to the wall, not as "keep it clean" — on the
- * ~98% of listing photos where the wall is already clean, the correct
- * output is a wall regenerated identically to the input, not a "cleaned"
- * version of it.
  */
-export const OPENAI_SMOOTH_SURFACE_INSTRUCTION = `WALLS AND CEILINGS — read this carefully, it is the most common mistake made on this kind of edit.
-
-DEFAULT (applies to most photos): if a wall or ceiling is already clean and evenly lit in the ORIGINAL photo — no heavy shadowing, no stains or marks, no patchiness — reproduce it EXACTLY as it already looks: same flat, smooth, even painted finish, same tone. Do not regenerate it, do not "improve" it, do not add anything to it — copy it forward as-is, the same way an already-clean floor or an already-clean benchtop should be copied forward as-is.
-
-EXCEPTION (only when the wall/ceiling genuinely needs it): if a wall or ceiling in the original photo is heavily shadowed, patchy, stained, marked or unevenly lit, bring it up to a clean, evenly-lit, smooth painted finish — matching the same standard an already-clean wall would already be at. This is strictly a lighting/exposure correction (like dodging a shadow in a darkroom), never a material or texture change.
-
-THE ONE MISTAKE TO NEVER MAKE, in EITHER case above: do not add any grain, noise, mottling, blotchiness, cloud-like patchiness, stucco-like texture, or soft light/dark surface variation that isn't genuinely present in the original photograph. The specific defect to actively guard against: a smooth painted wall coming back looking like unevenly cured plaster, a bad paint job, or a cloudy/mottled surface with soft blotches of slightly different tone scattered across it. That is never correct, whether the wall was already clean (default case) or being brightened from shadow (exception case) — a flat painted wall must stay perfectly flat, smooth and even either way. This applies to walls, ceilings, doors, skirting boards and cabinetry, everywhere in the frame, not just the main subject of the edit.`;
+export const OPENAI_SMOOTH_SURFACE_INSTRUCTION = `Flat painted surfaces — walls, ceilings, doors, skirting boards, cabinetry — must stay exactly as smooth and clean as they are in the original photo. Do not add any grain, noise, mottling, blotchiness, stucco-like texture, or surface variation that isn't genuinely present in the original photograph. A perfectly smooth painted wall must still look like a perfectly smooth painted wall in the result — flat, even and clean — never textured, grainy, or patchy. This applies everywhere in the frame, not just the main subject being edited.`;
 
 /**
  * Appended alongside the other OpenAI-only instructions for every OpenAI
