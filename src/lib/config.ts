@@ -39,7 +39,7 @@ export const FAL_BASE_URL = "https://fal.run";
 // this app targets gpt-image-2 directly. Cost is metered per-token by OpenAI
 // (varies with resolution/quality) rather than a flat per-image rate.
 // ---------------------------------------------------------------------------
-export const OPENAI_MODEL = "gpt-image-2";
+export const OPENAI_MODEL = "gpt-image-2.5-sunburst";
 export const OPENAI_QUALITY: "low" | "medium" | "high" = "high";
 
 // ---------------------------------------------------------------------------
