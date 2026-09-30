@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
                     : body.tab === "general"
                         ? "general"
                         : "declutter";
-    const sky: TwilightSky = body.sky === "purple" ? "purple" : "orange";
+    const sky: TwilightSky = body.sky === "purple" ? "purple" : body.sky === "blue" ? "blue" : "orange";
     const style: TwilightStyle = body.style === "golden" ? "golden" : "natural";
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
