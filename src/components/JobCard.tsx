@@ -35,6 +35,7 @@ const MODE_LABEL: Record<Job["mode"], string> = {
 const SKY_LABEL: Record<TwilightSky, string> = {
   orange: "Orange sunset",
   purple: "Purple twilight",
+  blue: "Blue",
 };
 
 export default function JobCard({ job, onRetry, onRemove }: Props) {
