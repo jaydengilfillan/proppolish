@@ -35,7 +35,7 @@ export type DeclutterIntensity = "light" | "heavy";
 export type EnhanceType = "standard" | "night";
 
 /** Which sky reference image Twilight jobs should be composited against. */
-export type TwilightSky = "orange" | "purple";
+export type TwilightSky = "orange" | "purple" | "blue";
 
 /**
  * Interior Twilight has two looks:
@@ -78,6 +78,8 @@ export const TWILIGHT_SKY_DESCRIPTIONS: Record<TwilightSky, string> = {
     "a rich dusk sky that is mostly a deep, cool blue across the upper sky, softening down through a dusty blue-grey and then a pale blush pink lower down, with only a narrow warm orange-peach glow right along the horizon line where the sun has just set — most of the sky is cool blue, the warm colour is a thin band right at the horizon, not the whole sky",
   purple:
     "a moody twilight sky that is mostly a deep indigo-purple across the upper sky, softening down through a dusty mauve-pink lower down, with only a narrow warm golden-peach glow right along the horizon line where the sun has just set — most of the sky is cool indigo-purple, the warm colour is a thin band right at the horizon, not the whole sky",
+  blue:
+    "a clear, soft twilight sky that is a gentle mid-blue across the upper sky, smoothly fading down through a pale hazy blue and then a warm soft peach-cream glow low near the horizon — a calm, clean gradient with no strong colour banding, most of the sky reading as soft blue with only a gentle warm blush right at the horizon line",
 };
 
 export const INTERIOR_PROMPT = `You are professionally editing a real estate listing photograph to make it clean, tidy and listing-ready.

@@ -39,6 +39,10 @@ export const FAL_BASE_URL = "https://fal.run";
 // this app targets gpt-image-2 directly. Cost is metered per-token by OpenAI
 // (varies with resolution/quality) rather than a flat per-image rate.
 // ---------------------------------------------------------------------------
+// TEMP TEST (branch test/gpt-image-2-5-sunburst): trying OpenAI's newer
+// gpt-image-2.5-sunburst model, which OpenAI markets as fixing exactly the
+// "adds grain/texture to untouched flat surfaces" defect gpt-image-2 has.
+// Revert to "gpt-image-2" if this doesn't hold up on real test images.
 export const OPENAI_MODEL = "gpt-image-2.5-sunburst";
 export const OPENAI_QUALITY: "low" | "medium" | "high" = "high";
 
@@ -99,6 +103,7 @@ export const OPENAI_COST_HINT = "~$0.10–$0.30/generation (OpenAI, varies by im
 export const TWILIGHT_SKIES: Record<TwilightSky, string> = {
   orange: "/skies/sunset-orange.jpg",
   purple: "/skies/twilight-purple.jpg",
+  blue: "/skies/twilight-blue.jpg",
 };
 
 // Accepted upload types. HEIC is intentionally unsupported in v1 (browsers can't
