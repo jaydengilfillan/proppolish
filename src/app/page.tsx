@@ -43,6 +43,7 @@ const TAB_LABEL: Record<Tab, string> = {
 const SKY_LABEL: Record<TwilightSky, string> = {
   orange: "Orange sunset",
   purple: "Purple twilight",
+  blue: "Blue",
 };
 
 const STYLE_LABEL: Record<TwilightStyle, string> = {
