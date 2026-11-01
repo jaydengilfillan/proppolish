@@ -145,6 +145,57 @@ function skyMask(A: Planes, w: number, h: number): Float32Array {
   return gauss(er(er(m, true), false), w, h, 4);
 }
 
+/**
+ * Mask (0..1) of lawn the AI genuinely repaired: it is healthy green in the AI
+ * result but was brown / dry / bare / patchy in the original. There the AI's
+ * grass is wanted (patch repair or full re-lay); everywhere else the original's
+ * own pixels stay.
+ */
+function lawnRepairMask(O: Planes, A: Planes, w: number, h: number): { mask: Float32Array; share: number } {
+  const m = new Float32Array(w * h);
+  const hsv = (P: Planes, i: number) => {
+    const r = P[0][i], g = P[1][i], b = P[2][i];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let hue = 0;
+    if (d > 0) {
+      if (mx === r) hue = 60 * (((g - b) / d + 6) % 6);
+      else if (mx === g) hue = 60 * ((b - r) / d + 2);
+      else hue = 60 * ((r - g) / d + 4);
+    }
+    return { hue, sat: mx > 0 ? d / mx : 0, gd: (g - Math.max(r, b)) / (g + 0.02) };
+  };
+  for (let y = 0; y < h; y++) {
+    if (y / h < 0.3) continue;
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const a = hsv(A, i);
+      if (a.hue < 70 || a.hue > 150 || a.sat < 0.3) continue;
+      const o = hsv(O, i);
+      m[i] = smooth(a.gd - o.gd, 0.1, 0.25);
+    }
+  }
+  // clean speckle (erode 5x5), then grow slightly and feather
+  const er = (src: Float32Array, horiz: boolean) => {
+    const out = new Float32Array(w * h);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        let v = 1;
+        for (let k = -2; k <= 2; k++) {
+          const xx = horiz ? Math.min(w - 1, Math.max(0, x + k)) : x;
+          const yy = horiz ? y : Math.min(h - 1, Math.max(0, y + k));
+          const sv = src[yy * w + xx];
+          if (sv < v) v = sv;
+        }
+        out[y * w + x] = v;
+      }
+    return out;
+  };
+  const f = gauss(er(er(m, true), false), w, h, 5);
+  let sum = 0;
+  for (let i = 0; i < f.length; i++) { f[i] = Math.min(1, f[i] * 1.6); sum += f[i]; }
+  return { mask: f, share: sum / f.length };
+}
+
 export interface RelightResult {
   data: Uint8ClampedArray;
   /** Mean sky weight 0..1 (informational). */
@@ -176,6 +227,7 @@ export function relightTransfer(orig: Raster, ai: Raster): RelightResult {
     ratio[c] = g;
   }
   const sky = skyMask(A, w, h);
+  const lawn = lawnRepairMask(O, A, w, h);
 
   const out = new Uint8ClampedArray(W * H * 4);
   const bil = (P: Float32Array, fx: number, fy: number) => {
@@ -194,8 +246,10 @@ export function relightTransfer(orig: Raster, ai: Raster): RelightResult {
     for (let x = 0; x < W; x++) {
       const fx = ((x + 0.5) * w) / W - 0.5;
       const i = (y * W + x) * 4;
-      const s = bil(sky, fx, fy);
-      skySum += s;
+      const sk = bil(sky, fx, fy);
+      const lw = bil(lawn.mask, fx, fy);
+      const s = Math.min(1, sk + lw * (1 - sk));
+      skySum += sk;
       const ax = Math.min(aw - 1, Math.floor(((x + 0.5) * aw) / W));
       const ai4 = (ay * aw + ax) * 4;
       for (let c = 0; c < 3; c++) {
