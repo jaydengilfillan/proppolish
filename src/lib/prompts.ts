@@ -238,18 +238,17 @@ Grade it like a high-end Gold Coast architectural magazine campaign: warm, soft,
 
 No fake lighting, lens flare, extra objects or people. Do not change structure, doors, windows, landscaping layout or object positions. Keep text, signs and fine detail sharp. Photorealistic and natural.`;
 
-/** Interior counterpart of the Gold Coast hero grade: global WB/exposure/contrast/
- *  saturation only. Learned the hard way: any mention of joinery colours or window
+/** Interior of "Warm cinematic" (v3, approved): warm late-afternoon sunlit feel with
+ *  soft sun patches and depth, global WB/exposure/contrast/saturation only. Learned the hard way: any mention of joinery colours or window
  *  clarity makes the model recolour cabinets/bedding or reveal views behind sheers. */
 export const GOLD_COAST_HERO_INTERIOR_PROMPT = `Use the supplied interior photo as the exact base image. Keep the room, every object, architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. This is a colour-grade and light-balance pass ONLY.
 
-Grade it like a high-end Gold Coast architectural magazine interior: warm, soft, airy, quiet luxury, LOW saturation.
+Grade it like a luxury architectural-magazine interior shot in warm late-afternoon light: calm, quiet, expensive, LOW saturation, with depth rather than a flat bright-white look.
 - Change only global white balance, exposure, contrast and saturation. Do NOT recolour, restyle or replace any individual object, material, cabinet, vanity, tile, bedding, furniture base or fabric: white things stay white/cream, timber stays timber, stone stays stone, each keeps its own colour and finish.
-- WHITES: warm creamy off-white walls and ceilings, never cold, grey, blue or yellow.
-- LIGHT: bright, soft, even. Lift shadows and dark corners, soft gentle contrast, slightly matte lifted blacks. Recover blown highlights. No HDR look, halos or glow.
-- COLOUR: muted, earthy and low-saturation overall; existing timber floors and joinery warm honey/oak (not orange, not yellow), carpet and stone soft warm beige. Nothing vivid, neon or orange. No colour cast.
-- WINDOWS AND CURTAINS: keep sheer curtains, blinds, frosted glass and louvres exactly as they are; do not make windows clearer or reveal anything behind them. Keep views through clear glass exactly as shown, bright but not blown, not heavily blue.
-- TEXTURE: keep every pattern, carpet weave, tile, grain, frame, bar and mesh exactly as in the original (same pattern, scale, spacing). Keep text and fine detail sharp.
+- LIGHT: warm golden-hour feel, softly sunlit, gentle directional warmth, soft shadows that keep depth and form (not lifted flat), smooth highlight roll-off, slightly matte blacks. Do not make it high-key or bright white. No HDR look, halos or glow.
+- PALETTE: warm sand, biscuit and soft cream walls and ceilings, never cold, grey, blue, pink or yellow. Muted, earthy and cohesive: timber warm honey-oak, stone and carpet warm beige. Nothing vivid, orange or neon.
+- WINDOWS AND CURTAINS: keep sheers, blinds, frosted glass and louvres exactly as they are; do not reveal anything behind them. Views through clear glass stay as shown, not heavily blue.
+- TEXTURE: keep every pattern, weave, tile, grain, frame, bar and mesh exactly as in the original. Keep fine detail sharp.
 
 No fake lighting, extra objects or people. Do not change structure, windows, doors or furniture. Photorealistic.`;
 
