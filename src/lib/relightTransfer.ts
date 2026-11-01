@@ -152,7 +152,25 @@ function skyMask(A: Planes, w: number, h: number): Float32Array {
  * own pixels stay.
  */
 function lawnRepairMask(O: Planes, A: Planes, w: number, h: number): { mask: Float32Array; share: number } {
-  const m = new Float32Array(w * h);
+  const n = w * h;
+  const lumO = new Float32Array(n), lumA = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    lumO[i] = 0.299 * O[0][i] + 0.587 * O[1][i] + 0.114 * O[2][i];
+    lumA[i] = 0.299 * A[0][i] + 0.587 * A[1][i] + 0.114 * A[2][i];
+  }
+  // Fine-detail correlation between original and AI: where the AI redrew the
+  // texture (a re-laid lawn) the two no longer line up; untouched hedges,
+  // turf, trees and buildings still correlate and stay original pixels.
+  const loO = gauss(lumO, w, h, 1.5), loA = gauss(lumA, w, h, 1.5);
+  const hO = new Float32Array(n), hA = new Float32Array(n);
+  for (let i = 0; i < n; i++) { hO[i] = lumO[i] - loO[i]; hA[i] = lumA[i] - loA[i]; }
+  const prod = (a: Float32Array, b: Float32Array) => {
+    const o = new Float32Array(n);
+    for (let i = 0; i < n; i++) o[i] = a[i] * b[i];
+    return gauss(o, w, h, 6);
+  };
+  const cOO = prod(hO, hO), cAA = prod(hA, hA), cOA = prod(hO, hA);
+  const m = new Float32Array(n);
   const hsv = (P: Planes, i: number) => {
     const r = P[0][i], g = P[1][i], b = P[2][i];
     const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
@@ -169,14 +187,16 @@ function lawnRepairMask(O: Planes, A: Planes, w: number, h: number): { mask: Flo
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       const a = hsv(A, i);
-      if (a.hue < 70 || a.hue > 150 || a.sat < 0.3) continue;
+      if (a.hue < 70 || a.hue > 150 || a.sat < 0.3) continue; // AI result must be healthy green
       const o = hsv(O, i);
-      m[i] = smooth(a.gd - o.gd, 0.1, 0.25);
+      const colourChange = smooth(a.gd - o.gd, 0.1, 0.25); // brown/bare turned green
+      const corr = cOA[i] / Math.sqrt(cOO[i] * cAA[i] + 4e-6);
+      const redrawn = smooth(0.55 - corr, 0, 0.3) * smooth(Math.sqrt(Math.max(0, cAA[i])), 0.004, 0.012);
+      m[i] = Math.max(colourChange, redrawn);
     }
   }
-  // clean speckle (erode 5x5), then grow slightly and feather
   const er = (src: Float32Array, horiz: boolean) => {
-    const out = new Float32Array(w * h);
+    const out = new Float32Array(n);
     for (let y = 0; y < h; y++)
       for (let x = 0; x < w; x++) {
         let v = 1;
@@ -190,10 +210,10 @@ function lawnRepairMask(O: Planes, A: Planes, w: number, h: number): { mask: Flo
       }
     return out;
   };
-  const f = gauss(er(er(m, true), false), w, h, 5);
+  const f = gauss(er(er(m, true), false), w, h, 4);
   let sum = 0;
-  for (let i = 0; i < f.length; i++) { f[i] = Math.min(1, f[i] * 1.6); sum += f[i]; }
-  return { mask: f, share: sum / f.length };
+  for (let i = 0; i < n; i++) { f[i] = Math.min(1, f[i] * 1.6); sum += f[i]; }
+  return { mask: f, share: sum / n };
 }
 
 export interface RelightResult {
