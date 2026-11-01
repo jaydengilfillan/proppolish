@@ -253,27 +253,29 @@ Grade it like a high-end Gold Coast architectural magazine interior: warm, soft,
 
 No fake lighting, extra objects or people. Do not change structure, windows, doors or furniture. Photorealistic.`;
 
-/** Architectural-magazine grade (v1, tuned against Domain reference campaigns):
- *  bright, airy, high-key, soft low contrast, creamy warm neutrals, muted palette. */
-export const GOLD_COAST_ARCH_PROMPT = `Use the supplied exterior photo as the exact base image. Keep architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign any object. This is a light and colour-grade pass only: change white balance, exposure, contrast and saturation, not the objects themselves.
+/** Architectural-magazine grade (v2): a golden-hour RELIGHT (directional warm sun,
+ *  readable shadows, sandy walls, dusty-blue sky, muted olive greens), not a flat
+ *  high-key grade — the flat version looked pastel next to real campaign images. */
+export const GOLD_COAST_ARCH_PROMPT = `Use the supplied exterior photo as the exact base image. Keep architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign any object. This is a relight and colour-grade pass only.
 
-Grade it like a premium architectural-magazine photograph of a luxury Gold Coast residence: bright, airy, high-key, soft and natural, warm sunlit, with a calm, refined, understated palette.
-- LIGHT: gentle, bright, soft warm sun. Open shadows so they are light and transparent, soft low contrast, creamy highlights that roll off smoothly without clipping, slightly lifted matte blacks. No HDR look, halos, glow or heavy vignette.
-- PALETTE: warm sandy cream and soft limestone neutrals; white render becomes warm cream, never grey or blue-white. Slightly desaturated overall: elegant and muted, not punchy.
-- SKY: soft pale blue fading to warm peach-cream near the horizon, delicate wispy clouds. Not saturated, not pink, not purple. If overcast or dull, replace with this soft sky.
-- GREENERY: soft natural sage-olive green, gently desaturated, real leaf detail, never neon or yellow-lime. Keep every plant's exact shape and position.
-- POOL AND WATER: clear soft aqua, slightly gentler than the original saturation, clean, never neon.
-- ROAD, DRIVEWAY, PAVING: keep original colour, texture and joints; only brighten slightly.
+Relight it as a luxury architectural-magazine photograph taken in the last golden hour before sunset: low warm sun raking across the building from one side, giving gentle directional light, soft long shadows and real depth and form on every surface. Shadows stay present and readable, never flat, washed out or lifted to grey.
+- LIGHT: warm golden sunlight on sunlit surfaces, soft warm-neutral shadows, smooth highlight roll-off, a subtle golden glow. Lawn shows soft sun and shadow streaks. No HDR look, halos, lens flare or heavy vignette.
+- WALLS: sunlit render and walls become warm sand-beige, soft biscuit and taupe with natural tonal variation: not bright white, not grey, and never pink, peach or salmon. Shaded faces are a slightly cooler soft warm-grey so form reads clearly. Stone and timber rich and earthy.
+- SKY: clean, calm soft dusty-blue gradient warming to a pale golden haze at the horizon, minimal soft clouds, no pink or purple. If overcast or dull, replace with this.
+- PALETTE: muted, earthy, desaturated and cohesive.
+- GREENERY: deep natural olive and sage green with a warm golden cast where sunlit, noticeably less saturated than the original lawn, real leaf detail, never neon or lime. Keep every plant's exact shape and position.
+- WATER: pool stays clean, clear and luminous soft aqua-blue, bright and inviting (not dull, grey or brown), never neon.
+- ROAD, DRIVEWAY, PAVING: keep original colour, texture and joints; only a warm sunlight cast.
 
-No fake lighting, lens flare, extra objects or people. Do not change structure, doors, windows, landscaping layout or any object. Keep text and fine detail sharp. Photorealistic.`;
+No extra objects or people. Do not change structure, doors, windows, landscaping layout or any object. Keep text and fine detail sharp. Photorealistic.`;
 
 export const GOLD_COAST_ARCH_INTERIOR_PROMPT = `Use the supplied interior photo as the exact base image. Keep the room, every object, architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. This is a colour-grade and light-balance pass ONLY.
 
-Grade it like a premium architectural-magazine interior of a luxury Gold Coast home: bright, airy, high-key, soft warm sunlight, quiet and refined, LOW saturation.
+Grade it like a luxury architectural-magazine interior shot in warm late-afternoon light: calm, quiet, expensive, LOW saturation, with depth rather than a flat bright-white look.
 - Change only global white balance, exposure, contrast and saturation. Do NOT recolour, restyle or replace any individual object, material, cabinet, vanity, tile, bedding, furniture base or fabric: white things stay white/cream, timber stays timber, stone stays stone, each keeps its own colour and finish.
-- LIGHT: bright, soft and even with gentle warm sun feel. Open up shadows and dark corners, soft low contrast, creamy highlights that roll off smoothly without clipping, slightly lifted matte blacks. No HDR look, halos or glow.
-- PALETTE: warm cream walls and ceilings, never cold, grey, blue or yellow. Muted, earthy, desaturated: timber soft honey-oak, stone and carpet warm sandy beige, nothing vivid, orange or neon.
-- WINDOWS AND CURTAINS: keep sheers, blinds, frosted glass and louvres exactly as they are; do not reveal anything behind them. Views through clear glass stay as shown, bright but not blown, not heavily blue.
+- LIGHT: warm golden-hour feel, softly sunlit, gentle directional warmth, soft shadows that keep depth and form (not lifted flat), smooth highlight roll-off, slightly matte blacks. Do not make it high-key or bright white. No HDR look, halos or glow.
+- PALETTE: warm sand-beige, biscuit and soft cream walls and ceilings, never cold, grey, blue, pink, peach, salmon or yellow; keep the warmth gentle and neutral-leaning. Muted, earthy and cohesive: timber warm honey-oak, stone and carpet warm beige. Nothing vivid, orange or neon.
+- WINDOWS AND CURTAINS: keep sheers, blinds, frosted glass and louvres exactly as they are; do not reveal anything behind them. Views through clear glass stay as shown, not heavily blue.
 - TEXTURE: keep every pattern, weave, tile, grain, frame, bar and mesh exactly as in the original. Keep fine detail sharp.
 
 No fake lighting, extra objects or people. Do not change structure, windows, doors or furniture. Photorealistic.`;
