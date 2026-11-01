@@ -204,7 +204,7 @@ export async function conformToSize(url: string, width: number, height: number):
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bmp, 0, 0, width, height);
     const out = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.95)
+      canvas.toBlob(resolve, "image/jpeg", 0.97)
     );
     if (!out) throw new Error("Could not encode the resized image.");
     return URL.createObjectURL(out);
@@ -247,4 +247,80 @@ export function triggerDownload(url: string, filename: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/**
+ * Full-resolution detail restoration (see detailRestore.ts). Runs in a Web
+ * Worker so the UI stays responsive. The reference is the ORIGINAL full-size
+ * upload: the model only ever sees a ≤4K copy, so its result is soft once
+ * stretched back to the original size; this puts the original's real fine
+ * detail back wherever the picture is unchanged. NEVER throws: on any problem the AI
+ * result is returned untouched.
+ */
+/** Pixel size of an image URL, or null if it cannot be read. */
+export async function imageSize(url: string): Promise<{ width: number; height: number } | null> {
+  try {
+    const bmp = await createImageBitmap(await urlToBlob(url));
+    const s = { width: bmp.width, height: bmp.height };
+    bmp.close();
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+export async function restoreDetailOrKeep(resultUrl: string, referenceUrl: string): Promise<string> {
+  try {
+    const refMeta = await imageSize(referenceUrl);
+    if (!refMeta || refMeta.width * refMeta.height > 60_000_000) return resultUrl;
+    const [outBlob, refBlob] = await Promise.all([urlToBlob(resultUrl), urlToBlob(referenceUrl)]);
+    const [outBmp, refBmp] = await Promise.all([createImageBitmap(outBlob), createImageBitmap(refBlob)]);
+    const toRaster = (bmp: ImageBitmap) => {
+      const c = document.createElement("canvas");
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("no 2d context");
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, bmp.width, bmp.height);
+      return { data: d.data, width: bmp.width, height: bmp.height };
+    };
+    const out = toRaster(outBmp);
+    const ref = toRaster(refBmp);
+    outBmp.close();
+    refBmp.close();
+    // Only sane when the two are the same photo framing.
+    if (Math.abs(out.width / out.height - ref.width / ref.height) > 0.02) return resultUrl;
+
+    const worker = new Worker(new URL("./detailRestore.worker.ts", import.meta.url));
+    const res = await new Promise<{ data: Uint8ClampedArray; coverage: number }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        worker.terminate();
+        reject(new Error("detail restore timed out"));
+      }, 120_000);
+      worker.onmessage = (ev) => {
+        clearTimeout(timer);
+        worker.terminate();
+        ev.data.ok ? resolve(ev.data) : reject(new Error(ev.data.error));
+      };
+      worker.onerror = (ev) => {
+        clearTimeout(timer);
+        worker.terminate();
+        reject(new Error(ev.message));
+      };
+      worker.postMessage({ ref, out }, [ref.data.buffer, out.data.buffer]);
+    });
+    if (res.coverage < 0.002) return resultUrl;
+    const c = document.createElement("canvas");
+    c.width = out.width;
+    c.height = out.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return resultUrl;
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(res.data), out.width, out.height), 0, 0);
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.97));
+    return blob ? URL.createObjectURL(blob) : resultUrl;
+  } catch (err) {
+    console.warn("restoreDetailOrKeep failed; keeping AI result", err);
+    return resultUrl;
+  }
 }
