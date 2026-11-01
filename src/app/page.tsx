@@ -15,6 +15,8 @@ import type { Provider } from "@/lib/config";
 import {
   downscaleImage,
   conformOrKeep,
+  restoreDetailOrKeep,
+  imageSize,
   downscaleReferenceImage,
   MAIN_IMAGE_BYTES_WITH_REFERENCES,
   triggerDownload,
@@ -146,6 +148,7 @@ export default function Home() {
         | "height"
         | "originalWidth"
         | "originalHeight"
+        | "originalUrl"
       >
     ) => {
       // Prefer an explicit snapshot (avoids a race where jobsRef hasn't yet
@@ -183,7 +186,20 @@ export default function Home() {
         }
         // Absolute rule: the result is always exactly the same pixel size
         // (and aspect ratio) as the photo that was put in.
-        const finalUrl = await conformOrKeep(data.url, source.originalWidth, source.originalHeight);
+        const nativeSize = await imageSize(data.url);
+        let finalUrl = await conformOrKeep(data.url, source.originalWidth, source.originalHeight);
+        // The model returns ~3-4K pixels wide, so stretching it back to a big
+        // original makes it soft. Put the original's real fine detail back
+        // (only where the picture is unchanged). Never throws.
+        if (
+          nativeSize &&
+          source.originalWidth &&
+          source.originalWidth > nativeSize.width * 1.05 &&
+          source.scene !== "night_city" &&
+          source.originalUrl
+        ) {
+          finalUrl = await restoreDetailOrKeep(finalUrl, source.originalUrl);
+        }
         patchJob(id, { status: "done", resultUrl: finalUrl, error: undefined });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Processing failed.";
@@ -216,6 +232,7 @@ export default function Home() {
             height: job.height,
             originalWidth: job.originalWidth,
             originalHeight: job.originalHeight,
+            originalUrl: job.originalUrl,
           });
         }
       };
