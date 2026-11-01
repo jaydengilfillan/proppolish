@@ -84,6 +84,10 @@ const MODE_LABEL: Record<Mode, string> = {
  * tucked in the header's top-right corner since it's a utility, not a tab
  * in the main Declutter/Enhance/.../Prompt workflow.
  */
+/** Tabs hidden for now (not in use). Flip to true to bring them back. */
+const SHOW_HDR_TAB = false;
+const SHOW_FLOORPLAN_TAB = false;
+
 type View = "process" | "hdr" | "match" | "floorplan" | "notes" | "usage";
 
 export default function Home() {
@@ -541,6 +545,7 @@ export default function Home() {
             {TAB_LABEL[t]}
           </button>
         ))}
+        {SHOW_HDR_TAB && (
         <button
           onClick={() => setView("hdr")}
           className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
@@ -551,6 +556,7 @@ export default function Home() {
         >
           HDR Blend
         </button>
+        )}
         <button
           onClick={() => setView("match")}
           className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
@@ -561,6 +567,7 @@ export default function Home() {
         >
           Room Match
         </button>
+        {SHOW_FLOORPLAN_TAB && (
         <button
           onClick={() => setView("floorplan")}
           className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
@@ -571,6 +578,7 @@ export default function Home() {
         >
           Floor Plan
         </button>
+        )}
       </div>
 
       {/* Interior / Exterior selector — applies to every tab except Prompt
@@ -611,15 +619,19 @@ export default function Home() {
           HDR brackets, in-progress Floor Plan drawings — with no way back.
           Keeping them mounted costs a bit of idle DOM, not worth losing a
           real job over. */}
-      <div style={{ display: view === "hdr" ? "block" : "none" }}>
-        <HdrBlend onSend={handleHandoffSend} />
-      </div>
+      {SHOW_HDR_TAB && (
+        <div style={{ display: view === "hdr" ? "block" : "none" }}>
+          <HdrBlend onSend={handleHandoffSend} />
+        </div>
+      )}
       <div style={{ display: view === "match" ? "block" : "none" }}>
         <RoomMatch />
       </div>
-      <div style={{ display: view === "floorplan" ? "block" : "none" }}>
-        <FloorPlan />
-      </div>
+      {SHOW_FLOORPLAN_TAB && (
+        <div style={{ display: view === "floorplan" ? "block" : "none" }}>
+          <FloorPlan />
+        </div>
+      )}
       <div style={{ display: view === "notes" ? "block" : "none" }}>
         <Notes onUseInPrompt={handleUseNotePrompt} />
       </div>
