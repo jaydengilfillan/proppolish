@@ -235,7 +235,7 @@ export default function Home() {
       const mode =
         tab === "enhance" && enhanceType === "night"
           ? "exterior"
-          : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "gold_coast_hero")
+          : tab === "twilight" && twilightScene === "night_city"
             ? "exterior"
             : overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
@@ -592,7 +592,7 @@ export default function Home() {
       {view === "process" &&
         activeTab !== "general" &&
         !(activeTab === "enhance" && enhanceType === "night") &&
-        !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "gold_coast_hero")) && (
+        !(activeTab === "twilight" && twilightScene === "night_city") && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">

@@ -55,7 +55,7 @@ export type TwilightStyle = "natural" | "golden";
  *   exterior hero shots, dusk-through-the-window on interior shots.
  * - "gold_coast_hero": NOT a twilight look — a daytime relight/colour grade of a
  *   front-of-house shot into a bright, clean, warm Gold Coast magazine hero.
- *   Always exterior, no reference image. Lives under Twilight for ease of use.
+ *   Exterior or interior (each has its own prompt), no reference image. Lives under Twilight for ease of use.
  * - "night_city": converts a daytime balcony/rooftop/high-rise view of a
  *   city skyline into a full night cityscape — every building's windows lit,
  *   dark night sky, everything else (building shapes, layout, any signage)
@@ -223,17 +223,33 @@ Keep it fully photorealistic and believable — no over-processing, no HDR halos
  *   drifts palms/lawn toward yellow-lime when warmth is requested);
  * - sky is "natural mid-blue, not cyan" (otherwise it goes over-saturated).
  */
-export const GOLD_COAST_HERO_PROMPT = `Use the supplied front-of-house exterior photo as the exact base image. Keep architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move or redesign anything. This is a lighting and colour-grade pass only.
+export const GOLD_COAST_HERO_PROMPT = `Use the supplied exterior photo as the exact base image. Keep architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign any object. This is a lighting and colour-grade pass only: change white balance, exposure, contrast and saturation, not the objects themselves.
 
-Make it a premium Gold Coast magazine hero shot in clean, bright, late-morning sun, by a top architectural photographer:
-- LIGHT: bright, soft, directional sunlight. Lift shadows noticeably so no part of the property or lawn is dark or muddy, while keeping gentle natural shading for depth. Recover blown highlights. No HDR look, halos or glow.
-- WHITES: clean, bright white walls with a soft sunlit glow, never grey, blue or yellow. Keep real wall colours true, just cleaner and richer.
-- SKY: clean natural Gold Coast mid-blue (not cyan, not over-saturated) with a soft gradient. Keep the existing clouds, bright white and crisp. If the sky is overcast or dull, replace it with clean blue and a few soft white clouds.
-- GREENERY: healthy and fresh. Keep every plant's ORIGINAL hue; do not push foliage or lawn toward yellow, lime or neon, and do not raise foliage saturation more than slightly. Keep every palm frond, leaf and branch in its exact original shape and position; do not redraw or restyle vegetation.
-- ROAD, DRIVEWAY AND PATHS: keep their original neutral colour, texture, cracks and markings exactly. Only brighten the exposure slightly so they read clean and evenly lit. Do not recolour them and do not invent cracks, stains or patterns.
-- COLOUR: crisp, clean and luxurious with confident contrast and clarity. Neutral-to-very-slightly-warm, never orange, pink, yellow or oversaturated, no colour cast.
+Grade it like a high-end Gold Coast architectural magazine campaign: warm, soft, golden-hour-style sunlight, calm and expensive.
+- LIGHT: warm, soft, directional sun with a gentle golden glow on the walls. Lift shadows so nothing is dark or muddy, keep soft natural shading for depth, recover blown highlights, slightly matte lifted blacks. No HDR look, halos or glow.
+- WALLS: warm creamy whites and soft sandy neutrals (never cold, grey or blue-white). Real wall colours stay true, just warmer, cleaner and richer.
+- SKY: soft clean blue with a warm cream haze low near the horizon, existing clouds kept soft and bright. Keep it blue overall; avoid pink or lilac. If overcast or dull, replace with a soft blue sky and a few gentle clouds.
+- GREENERY: healthy, rich, natural green, slightly deeper and more olive than neon, with real leaf and blade detail. Keep every plant's original hue, never yellow or lime. Keep every palm frond, leaf and branch in its exact original shape and position.
+- POOL: clean natural turquoise, not neon.
+- ROAD, DRIVEWAY, PATHS, PAVING: keep original colour, texture and joints exactly; only brighten slightly.
+- OVERALL: refined, balanced, gently warm, confident contrast and clarity, greenery and sky still clearly coloured. Never orange, pink, over-saturated or colour-cast.
 
-No fake lighting, sunset tones, lens flare, extra objects or people. Do not change structure, rooflines, doors, windows, driveway, landscaping layout or object positions. Keep text, signs and fine detail sharp. Photorealistic and natural.`;
+No fake lighting, lens flare, extra objects or people. Do not change structure, doors, windows, landscaping layout or object positions. Keep text, signs and fine detail sharp. Photorealistic and natural.`;
+
+/** Interior counterpart of the Gold Coast hero grade: global WB/exposure/contrast/
+ *  saturation only. Learned the hard way: any mention of joinery colours or window
+ *  clarity makes the model recolour cabinets/bedding or reveal views behind sheers. */
+export const GOLD_COAST_HERO_INTERIOR_PROMPT = `Use the supplied interior photo as the exact base image. Keep the room, every object, architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. This is a colour-grade and light-balance pass ONLY.
+
+Grade it like a high-end Gold Coast architectural magazine interior: warm, soft, airy, quiet luxury, LOW saturation.
+- Change only global white balance, exposure, contrast and saturation. Do NOT recolour, restyle or replace any individual object, material, cabinet, vanity, tile, bedding, furniture base or fabric: white things stay white/cream, timber stays timber, stone stays stone, each keeps its own colour and finish.
+- WHITES: warm creamy off-white walls and ceilings, never cold, grey, blue or yellow.
+- LIGHT: bright, soft, even. Lift shadows and dark corners, soft gentle contrast, slightly matte lifted blacks. Recover blown highlights. No HDR look, halos or glow.
+- COLOUR: muted, earthy and low-saturation overall; existing timber floors and joinery warm honey/oak (not orange, not yellow), carpet and stone soft warm beige. Nothing vivid, neon or orange. No colour cast.
+- WINDOWS AND CURTAINS: keep sheer curtains, blinds, frosted glass and louvres exactly as they are; do not make windows clearer or reveal anything behind them. Keep views through clear glass exactly as shown, bright but not blown, not heavily blue.
+- TEXTURE: keep every pattern, carpet weave, tile, grain, frame, bar and mesh exactly as in the original (same pattern, scale, spacing). Keep text and fine detail sharp.
+
+No fake lighting, extra objects or people. Do not change structure, windows, doors or furniture. Photorealistic.`;
 
 export const TWILIGHT_INTERIOR_PROMPT = `You are professionally converting a daytime interior real estate photograph into a realistic dusk/twilight scene, as if the same room were photographed at that same time of evening. No second reference image is provided for this job — the sky/window view is described in words below on purpose, so there is nothing external whose colour could leak onto the room's own surfaces.
 
@@ -400,7 +416,7 @@ export function buildPrompt(
     base = (customPrompt ?? "").trim();
   } else if (tab === "twilight") {
     if (scene === "gold_coast_hero") {
-      base = GOLD_COAST_HERO_PROMPT;
+      base = mode === "interior" ? GOLD_COAST_HERO_INTERIOR_PROMPT : GOLD_COAST_HERO_PROMPT;
     } else if (scene === "night_city") {
       base = TWILIGHT_NIGHT_CITYSCAPE_PROMPT;
     } else if (mode === "exterior") {
