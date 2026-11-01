@@ -14,6 +14,7 @@ import {
 import type { Provider } from "@/lib/config";
 import {
   downscaleImage,
+  conformOrKeep,
   downscaleReferenceImage,
   MAIN_IMAGE_BYTES_WITH_REFERENCES,
   triggerDownload,
@@ -138,6 +139,8 @@ export default function Home() {
         | "referenceImages"
         | "width"
         | "height"
+        | "originalWidth"
+        | "originalHeight"
       >
     ) => {
       // Prefer an explicit snapshot (avoids a race where jobsRef hasn't yet
@@ -173,7 +176,10 @@ export default function Home() {
         if (!resp.ok || !data.url) {
           throw new Error(data.error || `Request failed (HTTP ${resp.status}).`);
         }
-        patchJob(id, { status: "done", resultUrl: data.url, error: undefined });
+        // Absolute rule: the result is always exactly the same pixel size
+        // (and aspect ratio) as the photo that was put in.
+        const finalUrl = await conformOrKeep(data.url, source.originalWidth, source.originalHeight);
+        patchJob(id, { status: "done", resultUrl: finalUrl, error: undefined });
       } catch (err) {
         const message = err instanceof Error ? err.message : "Processing failed.";
         patchJob(id, { status: "error", error: message });
@@ -203,6 +209,8 @@ export default function Home() {
             referenceImages: job.referenceImages,
             width: job.width,
             height: job.height,
+            originalWidth: job.originalWidth,
+            originalHeight: job.originalHeight,
           });
         }
       };
@@ -255,7 +263,7 @@ export default function Home() {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const originalUrl = URL.createObjectURL(file);
         try {
-          const { dataUri, width, height } = await downscaleImage(
+          const { dataUri, width, height, originalWidth, originalHeight } = await downscaleImage(
             file,
             referenceDataUris.length > 0 ? MAIN_IMAGE_BYTES_WITH_REFERENCES : undefined
           );
@@ -277,6 +285,8 @@ export default function Home() {
             downscaledDataUri: dataUri,
             width,
             height,
+            originalWidth,
+            originalHeight,
           });
         } catch (err) {
           newJobs.push({
