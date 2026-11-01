@@ -53,7 +53,9 @@ export type TwilightStyle = "natural" | "golden";
  * Twilight has two scenes:
  * - "dusk" (default): the original sunset/twilight look — sky-swap on
  *   exterior hero shots, dusk-through-the-window on interior shots.
- * - "gold_coast_hero": NOT a twilight look — a daytime relight/colour grade of a
+ * - "gold_coast_architectural": like gold_coast_hero but a brighter, airier,
+ *   lower-contrast, muted architectural-magazine grade (exterior + interior).
+ * - "gold_coast_hero" (shown as "Warm cinematic"): NOT a twilight look — a daytime relight/colour grade of a
  *   front-of-house shot into a bright, clean, warm Gold Coast magazine hero.
  *   Exterior or interior (each has its own prompt), no reference image. Lives under Twilight for ease of use.
  * - "night_city": converts a daytime balcony/rooftop/high-rise view of a
@@ -62,7 +64,7 @@ export type TwilightStyle = "natural" | "golden";
  *   locked exactly as photographed. Always treated as exterior/aerial —
  *   there's no "interior" version of a skyline shot.
  */
-export type TwilightScene = "dusk" | "night_city" | "gold_coast_hero";
+export type TwilightScene = "dusk" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
 
 /**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
@@ -251,6 +253,31 @@ Grade it like a high-end Gold Coast architectural magazine interior: warm, soft,
 
 No fake lighting, extra objects or people. Do not change structure, windows, doors or furniture. Photorealistic.`;
 
+/** Architectural-magazine grade (v1, tuned against Domain reference campaigns):
+ *  bright, airy, high-key, soft low contrast, creamy warm neutrals, muted palette. */
+export const GOLD_COAST_ARCH_PROMPT = `Use the supplied exterior photo as the exact base image. Keep architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign any object. This is a light and colour-grade pass only: change white balance, exposure, contrast and saturation, not the objects themselves.
+
+Grade it like a premium architectural-magazine photograph of a luxury Gold Coast residence: bright, airy, high-key, soft and natural, warm sunlit, with a calm, refined, understated palette.
+- LIGHT: gentle, bright, soft warm sun. Open shadows so they are light and transparent, soft low contrast, creamy highlights that roll off smoothly without clipping, slightly lifted matte blacks. No HDR look, halos, glow or heavy vignette.
+- PALETTE: warm sandy cream and soft limestone neutrals; white render becomes warm cream, never grey or blue-white. Slightly desaturated overall: elegant and muted, not punchy.
+- SKY: soft pale blue fading to warm peach-cream near the horizon, delicate wispy clouds. Not saturated, not pink, not purple. If overcast or dull, replace with this soft sky.
+- GREENERY: soft natural sage-olive green, gently desaturated, real leaf detail, never neon or yellow-lime. Keep every plant's exact shape and position.
+- POOL AND WATER: clear soft aqua, slightly gentler than the original saturation, clean, never neon.
+- ROAD, DRIVEWAY, PAVING: keep original colour, texture and joints; only brighten slightly.
+
+No fake lighting, lens flare, extra objects or people. Do not change structure, doors, windows, landscaping layout or any object. Keep text and fine detail sharp. Photorealistic.`;
+
+export const GOLD_COAST_ARCH_INTERIOR_PROMPT = `Use the supplied interior photo as the exact base image. Keep the room, every object, architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. This is a colour-grade and light-balance pass ONLY.
+
+Grade it like a premium architectural-magazine interior of a luxury Gold Coast home: bright, airy, high-key, soft warm sunlight, quiet and refined, LOW saturation.
+- Change only global white balance, exposure, contrast and saturation. Do NOT recolour, restyle or replace any individual object, material, cabinet, vanity, tile, bedding, furniture base or fabric: white things stay white/cream, timber stays timber, stone stays stone, each keeps its own colour and finish.
+- LIGHT: bright, soft and even with gentle warm sun feel. Open up shadows and dark corners, soft low contrast, creamy highlights that roll off smoothly without clipping, slightly lifted matte blacks. No HDR look, halos or glow.
+- PALETTE: warm cream walls and ceilings, never cold, grey, blue or yellow. Muted, earthy, desaturated: timber soft honey-oak, stone and carpet warm sandy beige, nothing vivid, orange or neon.
+- WINDOWS AND CURTAINS: keep sheers, blinds, frosted glass and louvres exactly as they are; do not reveal anything behind them. Views through clear glass stay as shown, bright but not blown, not heavily blue.
+- TEXTURE: keep every pattern, weave, tile, grain, frame, bar and mesh exactly as in the original. Keep fine detail sharp.
+
+No fake lighting, extra objects or people. Do not change structure, windows, doors or furniture. Photorealistic.`;
+
 export const TWILIGHT_INTERIOR_PROMPT = `You are professionally converting a daytime interior real estate photograph into a realistic dusk/twilight scene, as if the same room were photographed at that same time of evening. No second reference image is provided for this job — the sky/window view is described in words below on purpose, so there is nothing external whose colour could leak onto the room's own surfaces.
 
 DO: Through any windows or glass doors, replace the visible outside sky/view with {{SKY_DESCRIPTION}}. That described colour belongs ONLY in that small window/glass area — nowhere else in the frame. Turn on interior lights that are physically already fitted to the room (ceiling lights, downlights, lamps, pendants) and dim the overall ambient exposure slightly so the room reads as photographed at dusk, not midday. Any warmth in the room must come ONLY from those real, existing light sources glowing at their own natural colour temperature (typically a soft neutral-to-warm white, like a real downlight or lamp) — small, localised pools of light immediately around each fixture are fine and expected. Keep the room's contents, furniture, layout and camera angle exactly the same.
@@ -415,7 +442,9 @@ export function buildPrompt(
     // full control, so full responsibility for what it does to the photo.
     base = (customPrompt ?? "").trim();
   } else if (tab === "twilight") {
-    if (scene === "gold_coast_hero") {
+    if (scene === "gold_coast_architectural") {
+      base = mode === "interior" ? GOLD_COAST_ARCH_INTERIOR_PROMPT : GOLD_COAST_ARCH_PROMPT;
+    } else if (scene === "gold_coast_hero") {
       base = mode === "interior" ? GOLD_COAST_HERO_INTERIOR_PROMPT : GOLD_COAST_HERO_PROMPT;
     } else if (scene === "night_city") {
       base = TWILIGHT_NIGHT_CITYSCAPE_PROMPT;
