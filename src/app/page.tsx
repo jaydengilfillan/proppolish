@@ -55,6 +55,7 @@ const STYLE_LABEL: Record<TwilightStyle, string> = {
 const SCENE_LABEL: Record<TwilightScene, string> = {
   dusk: "Twilight",
   night_city: "Night city",
+  gold_coast_hero: "Gold Coast hero",
 };
 
 const INTENSITY_LABEL: Record<DeclutterIntensity, string> = {
@@ -234,7 +235,7 @@ export default function Home() {
       const mode =
         tab === "enhance" && enhanceType === "night"
           ? "exterior"
-          : tab === "twilight" && twilightScene === "night_city"
+          : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "gold_coast_hero")
             ? "exterior"
             : overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
@@ -591,7 +592,7 @@ export default function Home() {
       {view === "process" &&
         activeTab !== "general" &&
         !(activeTab === "enhance" && enhanceType === "night") &&
-        !(activeTab === "twilight" && twilightScene === "night_city") && (
+        !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "gold_coast_hero")) && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
