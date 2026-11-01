@@ -57,7 +57,8 @@ const STYLE_LABEL: Record<TwilightStyle, string> = {
 const SCENE_LABEL: Record<TwilightScene, string> = {
   dusk: "Twilight",
   night_city: "Night city",
-  gold_coast_hero: "Gold Coast hero",
+  gold_coast_hero: "Warm cinematic",
+  gold_coast_architectural: "Architectural",
 };
 
 const INTENSITY_LABEL: Record<DeclutterIntensity, string> = {
