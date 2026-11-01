@@ -78,9 +78,18 @@ export async function POST(req: NextRequest) {
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
     const scene: TwilightScene =
       body.scene === "night_city" ? "night_city" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
-    // Twilight is a Nano Banana (FAL) multi-image edit only — no OpenAI path.
+    // Twilight is a Nano Banana (FAL) multi-image edit, except the Architectural
+    // exterior which uses ChatGPT (its light is better; the client then restores
+    // the original's real foliage/texture via relightTransfer).
     // Prompt (general) can go either way, same as Enhance.
-    const provider: Provider = tab === "twilight" ? "fal" : body.provider === "openai" ? "openai" : "fal";
+    const provider: Provider =
+      tab === "twilight"
+        ? scene === "gold_coast_architectural" && mode === "exterior"
+          ? "openai"
+          : "fal"
+        : body.provider === "openai"
+          ? "openai"
+          : "fal";
     const width = typeof body.width === "number" ? body.width : undefined;
     const height = typeof body.height === "number" ? body.height : undefined;
 
