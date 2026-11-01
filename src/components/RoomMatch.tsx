@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { Mode } from "@/lib/prompts";
 import { ACCEPTED_TYPES, COST_HINT } from "@/lib/config";
-import { downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
+import { conformOrKeep, downscaleImage, triggerDownload, urlToBlob } from "@/lib/image";
 import { buildZip } from "@/lib/zip";
 import BeforeAfterSlider from "./BeforeAfterSlider";
 
@@ -16,7 +16,13 @@ interface MatchPhoto {
   dataUri: string;
   isAnchor: boolean;
   status: MatchStatus;
+  /** Raw model output. Kept as-is because it's also sent to the server as the match reference for the other angles. */
   resultUrl?: string;
+  /** The result conformed to EXACTLY the original photo's pixel size — what's shown and downloaded. */
+  exactUrl?: string;
+  /** True original pixel dimensions of the uploaded photo. */
+  originalWidth?: number;
+  originalHeight?: number;
   error?: string;
 }
 
@@ -62,7 +68,7 @@ export default function RoomMatch() {
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const previewUrl = URL.createObjectURL(file);
       try {
-        const { dataUri } = await downscaleImage(file);
+        const { dataUri, originalWidth, originalHeight } = await downscaleImage(file);
         setPhotos((prev) => [
           ...prev,
           {
@@ -70,6 +76,8 @@ export default function RoomMatch() {
             fileName: file.name,
             previewUrl,
             dataUri,
+            originalWidth,
+            originalHeight,
             isAnchor: false,
             status: "idle",
           },
@@ -108,6 +116,7 @@ export default function RoomMatch() {
         isAnchor: p.id === id,
         status: "idle",
         resultUrl: undefined,
+        exactUrl: undefined,
         error: undefined,
       }))
     );
@@ -148,7 +157,8 @@ export default function RoomMatch() {
         patch(anchor.id, { status: "processing", error: undefined });
         try {
           anchorResultUrl = await callProcess(anchor.dataUri, undefined);
-          patch(anchor.id, { status: "done", resultUrl: anchorResultUrl, error: undefined });
+          const exactUrl = await conformOrKeep(anchorResultUrl, anchor.originalWidth, anchor.originalHeight);
+          patch(anchor.id, { status: "done", resultUrl: anchorResultUrl, exactUrl, error: undefined });
         } catch (err) {
           patch(anchor.id, {
             status: "error",
@@ -164,7 +174,8 @@ export default function RoomMatch() {
           patch(p.id, { status: "processing", error: undefined });
           try {
             const url = await callProcess(p.dataUri, anchorResultUrl);
-            patch(p.id, { status: "done", resultUrl: url, error: undefined });
+            const exactUrl = await conformOrKeep(url, p.originalWidth, p.originalHeight);
+            patch(p.id, { status: "done", resultUrl: url, exactUrl, error: undefined });
           } catch (err) {
             patch(p.id, {
               status: "error",
@@ -187,7 +198,8 @@ export default function RoomMatch() {
       try {
         const referenceImage = photo.isAnchor ? undefined : anchor?.resultUrl;
         const url = await callProcess(photo.dataUri, referenceImage, note);
-        patch(id, { status: "done", resultUrl: url, error: undefined });
+        const exactUrl = await conformOrKeep(url, photo.originalWidth, photo.originalHeight);
+        patch(id, { status: "done", resultUrl: url, exactUrl, error: undefined });
         setNotes((prev) => ({ ...prev, [id]: "" }));
       } catch (err) {
         patch(id, {
@@ -207,7 +219,7 @@ export default function RoomMatch() {
       const entries: { name: string; data: Uint8Array }[] = [];
       const used = new Set<string>();
       for (const p of done) {
-        const blob = await urlToBlob(p.resultUrl!);
+        const blob = await urlToBlob(p.exactUrl ?? p.resultUrl!);
         const buf = new Uint8Array(await blob.arrayBuffer());
         const dot = p.fileName.lastIndexOf(".");
         const stem = dot > 0 ? p.fileName.slice(0, dot) : p.fileName;
@@ -368,7 +380,7 @@ export default function RoomMatch() {
                 </div>
 
                 {p.status === "done" && p.resultUrl ? (
-                  <BeforeAfterSlider beforeUrl={p.previewUrl} afterUrl={p.resultUrl} />
+                  <BeforeAfterSlider beforeUrl={p.previewUrl} afterUrl={p.exactUrl ?? p.resultUrl} />
                 ) : (
                   <div className="relative overflow-hidden rounded-lg bg-neutral-100">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
