@@ -324,3 +324,63 @@ export async function restoreDetailOrKeep(resultUrl: string, referenceUrl: strin
     return resultUrl;
   }
 }
+
+
+/**
+ * Keep the ORIGINAL photo's pixels and borrow only the AI result's light and
+ * colour (see relightTransfer.ts). Removes the painted look AI gives foliage,
+ * grass and fine texture. Never throws: falls back to the AI result.
+ */
+export async function relightOrKeep(resultUrl: string, referenceUrl: string): Promise<string> {
+  try {
+    const refMeta = await imageSize(referenceUrl);
+    if (!refMeta || refMeta.width * refMeta.height > 60_000_000) return resultUrl;
+    const [outBlob, refBlob] = await Promise.all([urlToBlob(resultUrl), urlToBlob(referenceUrl)]);
+    const [outBmp, refBmp] = await Promise.all([createImageBitmap(outBlob), createImageBitmap(refBlob)]);
+    const toRaster = (bmp: ImageBitmap) => {
+      const c = document.createElement("canvas");
+      c.width = bmp.width;
+      c.height = bmp.height;
+      const ctx = c.getContext("2d", { willReadFrequently: true });
+      if (!ctx) throw new Error("no 2d context");
+      ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(0, 0, bmp.width, bmp.height);
+      return { data: d.data, width: bmp.width, height: bmp.height };
+    };
+    const out = toRaster(outBmp);
+    const ref = toRaster(refBmp);
+    outBmp.close();
+    refBmp.close();
+    if (Math.abs(out.width / out.height - ref.width / ref.height) > 0.02) return resultUrl;
+
+    const worker = new Worker(new URL("./relightTransfer.worker.ts", import.meta.url));
+    const res = await new Promise<{ data: Uint8ClampedArray }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        worker.terminate();
+        reject(new Error("relight timed out"));
+      }, 120_000);
+      worker.onmessage = (ev) => {
+        clearTimeout(timer);
+        worker.terminate();
+        ev.data.ok ? resolve(ev.data) : reject(new Error(ev.data.error));
+      };
+      worker.onerror = (ev) => {
+        clearTimeout(timer);
+        worker.terminate();
+        reject(new Error(ev.message));
+      };
+      worker.postMessage({ ref, out }, [ref.data.buffer, out.data.buffer]);
+    });
+    const c = document.createElement("canvas");
+    c.width = ref.width;
+    c.height = ref.height;
+    const ctx = c.getContext("2d");
+    if (!ctx) return resultUrl;
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(res.data), ref.width, ref.height), 0, 0);
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.97));
+    return blob ? URL.createObjectURL(blob) : resultUrl;
+  } catch (err) {
+    console.warn("relightOrKeep failed; keeping AI result", err);
+    return resultUrl;
+  }
+}

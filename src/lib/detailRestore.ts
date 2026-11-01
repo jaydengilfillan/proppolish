@@ -273,6 +273,37 @@ export function restoreDetail(ref: Raster, out: Raster): RestoreResult {
   for (let i = 0; i < mask.length; i++) {
     mask[i] = clamp((Math.sqrt(Math.max(0, energy[i])) - 3) / 6, 0, 1) * clamp(1 - (diff[i] - 6) / 12, 0, 1);
   }
+  // Fine-scale structure gate. The coarse "diff" above is averaged over a wide
+  // window, so a SMALL edit (fridge magnets, a scooter, a plant, a rug) barely
+  // moves it and the original's edges for the removed thing leak back in as
+  // ghost outlines. Here we require the AI's own fine detail to correlate with
+  // the original's: where the original has detail but the AI has none/different
+  // detail, the AI changed the content, so restoration is switched off (and the
+  // zone is grown so no ring of ghosting survives at its borders).
+  {
+    const hO = new Float32Array(mw * mh);
+    const hU = new Float32Array(mw * mh);
+    for (let i = 0; i < hO.length; i++) {
+      hO[i] = lWarp[i] - loO[i];
+      hU[i] = gOut[i] - loU[i];
+    }
+    const sq = (a: Float32Array, b: Float32Array) => {
+      const o = new Float32Array(a.length);
+      for (let i = 0; i < o.length; i++) o[i] = a[i] * b[i];
+      return gauss(o, mw, mh, Math.max(1.5, 4 * kM));
+    };
+    const cOO = sq(hO, hO), cUU = sq(hU, hU), cOU = sq(hO, hU);
+    const bad = new Float32Array(mw * mh);
+    for (let i = 0; i < bad.length; i++) {
+      // Only judge where the original actually has fine detail.
+      const present = clamp((Math.sqrt(Math.max(0, cOO[i])) - 1.5) / 2.5, 0, 1);
+      const corr = cOU[i] / Math.sqrt(cOO[i] * cUU[i] + 9 * 9 + 1e-6);
+      const agree = clamp((corr - 0.3) / 0.35, 0, 1);
+      bad[i] = present * (1 - agree);
+    }
+    const grown = boxBlur(bad, mw, mh, Math.max(2, Math.round(8 * kM)));
+    for (let i = 0; i < mask.length; i++) mask[i] *= clamp(1 - grown[i] * 4, 0, 1);
+  }
   mask = gauss(mask, mw, mh, 4 * kM);
 
   let cov = 0;
