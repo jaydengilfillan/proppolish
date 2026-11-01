@@ -25,7 +25,7 @@ interface ProcessBody {
   style?: unknown; // "natural" | "golden" (only meaningful when tab === "twilight" && mode === "interior")
   intensity?: unknown; // "light" | "heavy" (only meaningful when tab === "declutter")
   enhanceType?: unknown; // "standard" | "night" (only meaningful when tab === "enhance")
-  scene?: unknown; // "dusk" | "night_city" (only meaningful when tab === "twilight")
+  scene?: unknown; // "dusk" | "night_city" | "gold_coast_hero" (only meaningful when tab === "twilight")
   customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
   referenceImage?: unknown; // Room Match: URL/data URI of the anchor's staged result, only meaningful when tab === "restage"
   referenceImages?: unknown; // Prompt tab: array of up to 2 style/content reference data URIs, only meaningful when tab === "general"
@@ -76,7 +76,8 @@ export async function POST(req: NextRequest) {
     const style: TwilightStyle = body.style === "golden" ? "golden" : "natural";
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
-    const scene: TwilightScene = body.scene === "night_city" ? "night_city" : "dusk";
+    const scene: TwilightScene =
+      body.scene === "night_city" ? "night_city" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : "dusk";
     // Twilight is a Nano Banana (FAL) multi-image edit only — no OpenAI path.
     // Prompt (general) can go either way, same as Enhance.
     const provider: Provider = tab === "twilight" ? "fal" : body.provider === "openai" ? "openai" : "fal";
