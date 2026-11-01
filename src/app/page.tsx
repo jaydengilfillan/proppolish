@@ -196,7 +196,13 @@ export default function Home() {
         // The model returns ~3-4K pixels wide, so stretching it back to a big
         // original makes it soft. Put the original's real fine detail back
         // (only where the picture is unchanged). Never throws.
-        if (source.scene === "gold_coast_architectural" && source.mode === "exterior" && source.originalWidth && source.originalUrl) {
+        // Enhance is a light/colour-only pass (no objects are removed), so it is safe to
+        // rebuild from the original's pixels. Declutter/Restage change content, so they are not.
+        const lightOnlyExterior =
+          source.mode === "exterior" &&
+          ((source.tab === "twilight" && source.scene === "gold_coast_architectural") ||
+            (source.tab === "enhance" && source.enhanceType !== "night"));
+        if (lightOnlyExterior && source.originalWidth && source.originalUrl) {
           // Keep the original's own pixels (foliage, grass, texture) and borrow
           // only the AI's light and colour.
           finalUrl = await relightOrKeep(finalUrl, source.originalUrl);
