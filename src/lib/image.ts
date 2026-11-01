@@ -6,8 +6,16 @@ import { JPEG_QUALITY, MAX_EDGE } from "./config";
 export interface DownscaledImage {
   /** JPEG data URI, longest edge <= MAX_EDGE (may be smaller if we had to back off to fit the upload budget). */
   dataUri: string;
+  /** Dimensions of the DOWNSCALED image actually sent to the model. */
   width: number;
   height: number;
+  /**
+   * The photo's true original pixel dimensions (before any downscaling).
+   * Results are always conformed back to exactly this size — see
+   * conformToSize().
+   */
+  originalWidth?: number;
+  originalHeight?: number;
 }
 
 // Vercel's Node.js serverless functions cap the request body at ~4.5MB. We
@@ -59,7 +67,11 @@ export async function downscaleImage(
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(img, 0, 0, width, height);
 
-    return encodeUnderBudget(canvas, maxUploadBytesOverride ?? MAX_UPLOAD_BYTES);
+    return {
+      ...encodeUnderBudget(canvas, maxUploadBytesOverride ?? MAX_UPLOAD_BYTES),
+      originalWidth: img.naturalWidth,
+      originalHeight: img.naturalHeight,
+    };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -158,6 +170,66 @@ function encodeUnderBudget(canvas: HTMLCanvasElement, maxUploadBytes: number): D
 function estimateBytes(dataUri: string): number {
   const base64 = dataUri.slice(dataUri.indexOf(",") + 1);
   return Math.floor((base64.length * 3) / 4);
+}
+
+/**
+ * ABSOLUTE RULE: every result must have exactly the same pixel dimensions
+ * (and therefore aspect ratio) as the photo that was put in.
+ *
+ * The models can't guarantee that on their own — FAL only offers a fixed
+ * list of aspect ratios, OpenAI rounds to multiples of 16, and both cap the
+ * output size below what a full-size camera original is (e.g. 7008x4672 ->
+ * ~3248x2160) — so after the model returns, this resamples the result to the
+ * exact original width x height. It never crops: the model's output
+ * ratio is always within a fraction of a percent of the source, so scaling to
+ * fit is invisible, whereas cropping would lose edge content.
+ *
+ * Returns the original URL untouched if it already matches exactly, otherwise
+ * an object URL of a high-quality JPEG at the exact size.
+ */
+export async function conformToSize(url: string, width: number, height: number): Promise<string> {
+  const blob = await urlToBlob(url);
+  const bmp = await createImageBitmap(blob);
+  try {
+    if (bmp.width === width && bmp.height === height) return url;
+    if (width > 16384 || height > 16384 || width * height > 200_000_000) {
+      throw new Error(`Original size ${width}x${height} is too large to resize in the browser.`);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not get a 2D canvas context in this browser.");
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bmp, 0, 0, width, height);
+    const out = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.95)
+    );
+    if (!out) throw new Error("Could not encode the resized image.");
+    return URL.createObjectURL(out);
+  } finally {
+    bmp.close();
+  }
+}
+
+/**
+ * conformToSize(), but never throws: if the resize can't be done for any
+ * reason (cross-origin fetch blocked, huge image, odd browser) the model's
+ * own result is returned unchanged so the job still completes.
+ */
+export async function conformOrKeep(
+  url: string,
+  width?: number,
+  height?: number
+): Promise<string> {
+  if (!width || !height) return url;
+  try {
+    return await conformToSize(url, width, height);
+  } catch (err) {
+    console.warn("Could not conform result to original size (using model output as-is):", err);
+    return url;
+  }
 }
 
 /** Fetch a (possibly remote) image URL and return it as a Blob. */

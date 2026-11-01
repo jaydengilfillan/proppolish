@@ -30,9 +30,12 @@ export interface Job {
   originalUrl: string;
     /** Downscaled JPEG data URI actually sent to the server. */
   downscaledDataUri: string;
-    /** Original (pre-downscale) pixel dimensions — used by the OpenAI provider to pick an output size. */
+    /** Pixel dimensions of the downscaled image sent to the server — used to pick the model's output aspect ratio / size. */
   width?: number;
     height?: number;
+    /** TRUE original pixel dimensions of the uploaded photo — the result is always conformed to exactly this size. */
+  originalWidth?: number;
+    originalHeight?: number;
     /** FAL/OpenAI output image URL (or data URI) once processing succeeds. */
   resultUrl?: string;
     /** Readable error message when status === "error". */
