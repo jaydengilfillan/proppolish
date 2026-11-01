@@ -53,13 +53,16 @@ export type TwilightStyle = "natural" | "golden";
  * Twilight has two scenes:
  * - "dusk" (default): the original sunset/twilight look — sky-swap on
  *   exterior hero shots, dusk-through-the-window on interior shots.
+ * - "gold_coast_hero": NOT a twilight look — a daytime relight/colour grade of a
+ *   front-of-house shot into a bright, clean, warm Gold Coast magazine hero.
+ *   Always exterior, no reference image. Lives under Twilight for ease of use.
  * - "night_city": converts a daytime balcony/rooftop/high-rise view of a
  *   city skyline into a full night cityscape — every building's windows lit,
  *   dark night sky, everything else (building shapes, layout, any signage)
  *   locked exactly as photographed. Always treated as exterior/aerial —
  *   there's no "interior" version of a skyline shot.
  */
-export type TwilightScene = "dusk" | "night_city";
+export type TwilightScene = "dusk" | "night_city" | "gold_coast_hero";
 
 /**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
@@ -210,6 +213,27 @@ MARKED SUBJECT PROPERTY (only applies if the photo has one): some drone/aerial s
 ABSOLUTELY DO NOT (this is a legal requirement): add any EXTERIOR light fixture, lamp, downlight, wall sconce, uplight, garden/landscape spike or stake light, string light or illuminated feature that is not physically present in the original photograph (this restriction does NOT apply to windows — every window should be lit warmly as described above, that's expected) — this specifically includes the most common mistakes to avoid: inventing new downlights/spotlights under eaves that don't actually exist there, inventing new wall-mounted lights/sconces spaced along walls that aren't in the original photo, inventing new garden/landscape lights along a driveway, path or garden bed that aren't actually visible in the original photo, and making a letterbox, house number or sign glow/backlit/illuminated when it wasn't lit that way in the original photo — none of these are an exception to this rule, they must already be visible/lit in the original photo just like any other fixture; do not wash whole sections of wall in light or make the building look like it has more exterior fixtures than it actually does; leave every window dark or dim — that is just as wrong as inventing fake fixtures and makes the result look weak and unfinished; add, remove, duplicate or move any furniture, landscaping, vehicle, person or object; change the camera angle, framing, composition, zoom or perspective; change the building's structure, walls, windows, doors, roofline, or any permanent feature; alter neighbouring buildings, fences, power lines or structures; light up the properties immediately next to a marked subject property in a way that competes with it for attention; remove, move, resize, redraw or restyle any marker, pin, circle, arrow or border identifying the subject property; leave the building's facade, or any other key area of the subject property (stairs, decking, paths, pool, water's edge etc.), dark, muddy or underexposed — everything must stay brightly and clearly visible via soft ambient fill as described above, this is a hero shot, and this must be achieved through overall exposure, never by inventing a fixture or glow that isn't really there; add any garden/landscape lights that are not already visible in the original photo, anywhere in the frame, in any quantity. Preserve the property's true architecture, layout and every permanent feature EXACTLY as photographed — only the sky, all windows (lit warmly), and the exterior lighting from EXISTING fixtures (including existing garden lights, if visible) may change.
 
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted textures, no fake gloss.`;
+
+/**
+ * Gold Coast hero: lighting + colour grade only, for a daytime front-of-house
+ * shot. Tuned over several trial rounds — the specific wording matters:
+ * - road/driveway must NOT be asked to be "lifted to grey" (the model
+ *   recolours it beige and invents cracks), so it is locked instead;
+ * - foliage must be told to keep its original hue (the model otherwise
+ *   drifts palms/lawn toward yellow-lime when warmth is requested);
+ * - sky is "natural mid-blue, not cyan" (otherwise it goes over-saturated).
+ */
+export const GOLD_COAST_HERO_PROMPT = `Use the supplied front-of-house exterior photo as the exact base image. Keep architecture, camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move or redesign anything. This is a lighting and colour-grade pass only.
+
+Make it a premium Gold Coast magazine hero shot in clean, bright, late-morning sun, by a top architectural photographer:
+- LIGHT: bright, soft, directional sunlight. Lift shadows noticeably so no part of the property or lawn is dark or muddy, while keeping gentle natural shading for depth. Recover blown highlights. No HDR look, halos or glow.
+- WHITES: clean, bright white walls with a soft sunlit glow, never grey, blue or yellow. Keep real wall colours true, just cleaner and richer.
+- SKY: clean natural Gold Coast mid-blue (not cyan, not over-saturated) with a soft gradient. Keep the existing clouds, bright white and crisp. If the sky is overcast or dull, replace it with clean blue and a few soft white clouds.
+- GREENERY: healthy and fresh. Keep every plant's ORIGINAL hue; do not push foliage or lawn toward yellow, lime or neon, and do not raise foliage saturation more than slightly. Keep every palm frond, leaf and branch in its exact original shape and position; do not redraw or restyle vegetation.
+- ROAD, DRIVEWAY AND PATHS: keep their original neutral colour, texture, cracks and markings exactly. Only brighten the exposure slightly so they read clean and evenly lit. Do not recolour them and do not invent cracks, stains or patterns.
+- COLOUR: crisp, clean and luxurious with confident contrast and clarity. Neutral-to-very-slightly-warm, never orange, pink, yellow or oversaturated, no colour cast.
+
+No fake lighting, sunset tones, lens flare, extra objects or people. Do not change structure, rooflines, doors, windows, driveway, landscaping layout or object positions. Keep text, signs and fine detail sharp. Photorealistic and natural.`;
 
 export const TWILIGHT_INTERIOR_PROMPT = `You are professionally converting a daytime interior real estate photograph into a realistic dusk/twilight scene, as if the same room were photographed at that same time of evening. No second reference image is provided for this job — the sky/window view is described in words below on purpose, so there is nothing external whose colour could leak onto the room's own surfaces.
 
@@ -375,7 +399,9 @@ export function buildPrompt(
     // full control, so full responsibility for what it does to the photo.
     base = (customPrompt ?? "").trim();
   } else if (tab === "twilight") {
-    if (scene === "night_city") {
+    if (scene === "gold_coast_hero") {
+      base = GOLD_COAST_HERO_PROMPT;
+    } else if (scene === "night_city") {
       base = TWILIGHT_NIGHT_CITYSCAPE_PROMPT;
     } else if (mode === "exterior") {
       base = TWILIGHT_EXTERIOR_PROMPT;
