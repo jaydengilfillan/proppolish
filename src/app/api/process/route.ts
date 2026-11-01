@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError, nearestFalAspectRatio } from "@/lib/fal";
 import { openaiEdit, OpenAIImageError } from "@/lib/openai";
-import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType } from "@/lib/prompts";
+import { buildPrompt, Mode, Tab, TwilightSky, TwilightStyle, TwilightScene, DeclutterIntensity, EnhanceType, usesLawnReference, LAWN_REFERENCE_PATH } from "@/lib/prompts";
 import { resolutionTier, costPerImage, Provider, TWILIGHT_SKIES } from "@/lib/config";
 import { recordUsage, OPENAI_ESTIMATED_COST, UsageTab } from "@/lib/usage";
 import { uploadUsageImage } from "@/lib/blob";
@@ -160,7 +160,19 @@ export async function POST(req: NextRequest) {
     referenceImages = body.referenceImages as string[];
   }
 
-  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style, intensity, enhanceType, scene);
+  // The lawn reference photo only rides along once /public/lawn/lawn-reference.jpg
+  // has been added; until then the prompt works on its own.
+  let lawnRefUrl: string | undefined;
+  if (usesLawnReference(tab, mode, enhanceType, provider)) {
+    const candidate = new URL(LAWN_REFERENCE_PATH, req.nextUrl.origin).toString();
+    try {
+      const head = await fetch(candidate, { method: "HEAD" });
+      if (head.ok && (head.headers.get("content-type") ?? "").startsWith("image/")) lawnRefUrl = candidate;
+    } catch {
+      /* no reference available */
+    }
+  }
+  const prompt = buildPrompt(tab, mode, note, provider, customPrompt, !!referenceImage, sky, style, intensity, enhanceType, scene, !!lawnRefUrl);
 
   // For every tab except Twilight-dusk-exterior/Room-Match, FAL/OpenAI
   // receive just the one photo. Twilight-dusk-exterior appends the absolute
@@ -176,6 +188,9 @@ export async function POST(req: NextRequest) {
   if (tab === "twilight" && scene === "dusk" && mode === "exterior") {
     const skyPath = TWILIGHT_SKIES[sky];
     imageUrls.push(new URL(skyPath, req.nextUrl.origin).toString());
+  }
+  if (lawnRefUrl) {
+    imageUrls.push(lawnRefUrl);
   }
   if (referenceImage) {
     imageUrls.push(referenceImage);
