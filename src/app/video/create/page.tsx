@@ -12,6 +12,7 @@ import {
   CreateEngineId,
   MAX_REFS,
   PROMPT_STARTERS,
+  EFFECT_PRESETS,
   estimateCreateUsd,
 } from "@/lib/videoCreate";
 
@@ -51,6 +52,32 @@ async function uploadToFal(blob: Blob, fileName: string): Promise<string> {
   const put = await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": blob.type } });
   if (!put.ok) throw new Error(`Upload failed (${put.status})`);
   return fileUrl;
+}
+
+/** Grab a frame from a video file as a JPEG File (used so a drone clip can be dropped in directly). */
+async function frameFromVideo(file: File): Promise<File> {
+  const url = URL.createObjectURL(file);
+  try {
+    const v = document.createElement("video");
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = "auto";
+    v.src = url;
+    await new Promise<void>((res, rej) => {
+      v.onloadeddata = () => res();
+      v.onerror = () => rej(new Error("Couldn't read that video."));
+    });
+    v.currentTime = Math.min(0.1, (v.duration || 1) / 2);
+    await new Promise<void>((res) => { v.onseeked = () => res(); setTimeout(res, 3000); });
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth;
+    c.height = v.videoHeight;
+    c.getContext("2d")?.drawImage(v, 0, 0);
+    const blob = await new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Frame grab failed"))), "image/jpeg", 0.92));
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + "-frame.jpg", { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /** Decode an image file and re-encode it as a JPEG with the long edge at most 2048px. */
@@ -110,9 +137,11 @@ export default function CreatePage() {
 
   async function addFiles(files: FileList | File[]) {
     setError(null);
-    const imgs = Array.from(files).filter((f) => f.type.startsWith("image/")).slice(0, MAX_REFS - refs.length);
-    if (imgs.length === 0) return;
+    const picked = Array.from(files).filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/")).slice(0, MAX_REFS - refs.length);
+    if (picked.length === 0) return;
     try {
+      const imgs = await Promise.all(picked.map((f) => (f.type.startsWith("video/") ? frameFromVideo(f) : Promise.resolve(f))));
+      if (picked.some((f) => f.type.startsWith("video/"))) setStartFromFirst(true);
       const prepared = await Promise.all(imgs.map(prepImage));
       const added: Ref[] = prepared.map((p, i) => ({
         id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
@@ -236,10 +265,10 @@ export default function CreatePage() {
               }}
               className="flex h-[10.5rem] w-48 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 text-center text-xs text-neutral-500 hover:border-neutral-500"
             >
-              Drop images here
+              Drop images or a drone clip here
               <br />
               or click to choose
-              <input ref={fileInput} type="file" accept="image/*" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files)} />
+              <input ref={fileInput} type="file" accept="image/*,video/*" multiple hidden onChange={(e) => e.target.files && void addFiles(e.target.files)} />
             </label>
           )}
         </div>
@@ -266,6 +295,23 @@ export default function CreatePage() {
             <button key={p.label} onClick={() => setPrompt(p.text)} className="rounded-full border border-neutral-300 px-3 py-1 text-xs text-neutral-600 hover:border-neutral-500">
               {p.label}
             </button>
+          ))}
+        </div>
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+          <div className="mb-2 text-xs font-semibold text-amber-900">Effects: drop your drone clip above, pick one, then add tweaks (e.g. &quot;no mountains&quot;)</div>
+          {(["Time-lapse", "Hyperlapse"] as const).map((g) => (
+            <div key={g} className="mb-2 last:mb-0">
+              <div className="mb-1 text-[11px] text-neutral-500">
+                {g === "Time-lapse" ? "Time-lapse: camera stays still, time passes" : "Hyperlapse: camera travels through the scene while time speeds up"}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {EFFECT_PRESETS.filter((p) => p.group === g).map((p) => (
+                  <button key={p.label} onClick={() => { setPrompt(p.text); setStartFromFirst(true); setEngines(["kling4"]); }} className="rounded-full border border-amber-400 bg-white px-3 py-1 text-xs text-amber-800 hover:border-amber-600">
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
         {prefs.some((p) => p.on) && (

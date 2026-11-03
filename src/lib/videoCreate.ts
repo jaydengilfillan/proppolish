@@ -107,6 +107,22 @@ export const PROMPT_STARTERS: { label: string; text: string }[] = [
   { label: "Pool day", text: "A sunny pool day: the water sparkles and ripples gently, a light breeze moves the palms, a slow cinematic camera drift." },
 ];
 
+/**
+ * One-click effects, run on a still frame of the drone shot as the opening frame.
+ * Time-lapse = camera LOCKED OFF, time passes. Hyperlapse = camera TRAVELS through the scene while time speeds up.
+ */
+export type EffectGroup = "Time-lapse" | "Hyperlapse";
+export const EFFECT_PRESETS: { group: EffectGroup; label: string; text: string }[] = [
+  { group: "Time-lapse", label: "Sun rises", text: "Time-lapse with a completely locked-off, static camera: the sun starts just below the horizon and climbs steadily higher in the sky, the light shifting from deep orange to bright gold. Waves roll in naturally onto the shore, soft clouds drift. Camera does not move. Do not add mountains or any new landforms." },
+  { group: "Time-lapse", label: "Sunset", text: "Time-lapse with a completely locked-off, static camera: the sun sinks slowly toward the horizon, the sky turning from gold to deep orange and pink, shadows lengthening, waves rolling in naturally. Camera does not move. Do not add mountains or any new landforms." },
+  { group: "Time-lapse", label: "Day to dusk", text: "Time-lapse with a locked-off, static camera: bright daylight fades to blue hour and dusk, windows and lights in the buildings glow warm, clouds and waves move naturally." },
+  { group: "Time-lapse", label: "Clouds racing", text: "Time-lapse with a locked-off, static camera: clouds race across the sky, sunlight and shadows sweep across the scene, water moves naturally." },
+  { group: "Hyperlapse", label: "Sun rises + glide", text: "Drone hyperlapse: the camera glides smoothly and steadily forward along the coast at fast-forward speed while time passes, the sun rising from just below the horizon to higher in the sky, light shifting from deep orange to gold, waves rolling in naturally. Smooth continuous motion. Do not add mountains or any new landforms." },
+  { group: "Hyperlapse", label: "Sunset + glide", text: "Drone hyperlapse: the camera glides smoothly forward at fast-forward speed while the sun sinks toward the horizon and the sky shifts from gold to orange and pink, waves rolling in naturally. Smooth continuous motion. Do not add mountains or any new landforms." },
+  { group: "Hyperlapse", label: "Orbit the property", text: "Drone hyperlapse: the camera orbits smoothly around the property at fast-forward speed while the daylight slowly shifts toward golden hour, clouds drifting. Keep the buildings exact." },
+  { group: "Hyperlapse", label: "Push-in + dusk", text: "Drone hyperlapse: a fast smooth push-in toward the property while the sky moves from daylight to dusk and the windows light up warm." },
+];
+
 const clean = (s: string) => s.trim().replace(/[.\s]+$/g, "");
 
 /** Builds the full prompt, labelling each reference so the model knows what it is. */
@@ -130,7 +146,7 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
   });
   lines.push(clean(input.prompt) + ".");
   lines.push(
-    "Keep the property's architecture, colours and every reference exactly as shown in the images, with no warping or melting. Realistic physics, stable camera, photorealistic, no text or logos added."
+    "Keep the property's architecture and every reference exactly as shown in the images, with no warping or melting (lighting and sky may change only as the prompt describes). Realistic physics, stable camera, photorealistic, no text or logos added."
   );
   return lines.join(" ");
 }
