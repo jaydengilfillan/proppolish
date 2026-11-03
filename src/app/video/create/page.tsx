@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { APP_NAME } from "@/lib/config";
 import { triggerDownload, urlToBlob } from "@/lib/image";
+import { Job, useVideoStore } from "@/lib/videoStore";
+import VideoNav from "../VideoNav";
 import {
   Aspect,
   CREATE_ENGINES,
@@ -22,17 +24,6 @@ interface Ref {
   h: number;
   label: string;
 }
-type JobStatus = "waiting" | "queued" | "running" | "done" | "failed";
-interface Job {
-  id: string;
-  engine: CreateEngineId;
-  status: JobStatus;
-  note?: string;
-  videoUrl?: string;
-  error?: string;
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const money = (n: number) => `$${n.toFixed(2)}`;
 
 async function api<T>(path: string, body?: unknown): Promise<T> {
@@ -103,7 +94,9 @@ export default function CreatePage() {
   const [engines, setEngines] = useState<CreateEngineId[]>(["kling3pro"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const { jobs: allJobs, addJobs, removeJob, clearFinished, track, patchJob, prefs, prefsText, logPrompt } = useVideoStore();
+  const jobs = useMemo(() => allJobs.filter((j) => j.kind === "create"), [allJobs]);
+  const [usePrefs, setUsePrefs] = useState(true);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(() => CREATE_ENGINES.filter((e) => engines.includes(e.id)), [engines]);
@@ -111,7 +104,6 @@ export default function CreatePage() {
     () => selected.reduce((t, e) => t + estimateCreateUsd(e, secs, final, audio) * takes, 0),
     [selected, secs, final, audio, takes]
   );
-  const patchJob = (id: string, patch: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   const toggle = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
   async function addFiles(files: FileList | File[]) {
@@ -136,27 +128,6 @@ export default function CreatePage() {
     }
   }
 
-  async function pollJob(jobId: string, statusUrl: string, responseUrl: string) {
-    const started = Date.now();
-    while (Date.now() - started < 25 * 60 * 1000) {
-      await sleep(5000);
-      try {
-        const r = await api<{ status: string; videoUrl?: string; error?: string; position?: number }>(
-          `/api/video/status?statusUrl=${encodeURIComponent(statusUrl)}&responseUrl=${encodeURIComponent(responseUrl)}`
-        );
-        if (r.status === "DONE") return patchJob(jobId, { status: "done", videoUrl: r.videoUrl, note: undefined });
-        if (r.status === "FAILED") return patchJob(jobId, { status: "failed", error: r.error });
-        patchJob(jobId, {
-          status: r.status === "IN_QUEUE" ? "queued" : "running",
-          note: r.status === "IN_QUEUE" && typeof r.position === "number" ? `Waiting in line (${r.position + 1})` : undefined,
-        });
-      } catch (e) {
-        patchJob(jobId, { note: e instanceof Error ? e.message : "Retrying…" });
-      }
-    }
-    patchJob(jobId, { status: "failed", error: "Took too long. Check fal.ai and try again." });
-  }
-
   async function generate() {
     if (!prompt.trim() || selected.length === 0) return;
     setBusy(true);
@@ -164,16 +135,28 @@ export default function CreatePage() {
     try {
       const urls = await Promise.all(refs.map((r, i) => uploadToFal(r.blob, `ref-${i + 1}.jpg`)));
       const payloadRefs = refs.map((r, i) => ({ url: urls[i], label: r.label }));
+      const params = { prompt, refs: payloadRefs, startFromFirst, secs, aspect, audio, final };
+      const prefBlock = usePrefs ? prefsText() : "";
+      const sentPrompt = prefBlock ? `${prompt.trim()} ${prefBlock}` : prompt;
+      logPrompt(prompt);
       const newJobs: Job[] = selected.flatMap((e) =>
-        Array.from({ length: takes }, () => ({ id: `${Date.now()}-${e.id}-${Math.random().toString(36).slice(2, 6)}`, engine: e.id, status: "waiting" as JobStatus }))
+        Array.from({ length: takes }, () => ({
+          id: `${Date.now()}-${e.id}-${Math.random().toString(36).slice(2, 6)}`,
+          kind: "create" as const,
+          engine: e.id,
+          title: prompt.trim().slice(0, 80),
+          status: "waiting" as const,
+          createdAt: Date.now(),
+          params,
+        }))
       );
-      setJobs((js) => [...newJobs, ...js]);
+      addJobs(newJobs);
       await Promise.all(
         newJobs.map(async (job) => {
           try {
             const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", {
               engine: job.engine,
-              prompt,
+              prompt: sentPrompt,
               refs: payloadRefs,
               startFromFirst,
               secs,
@@ -181,8 +164,7 @@ export default function CreatePage() {
               audio,
               final,
             });
-            patchJob(job.id, { status: "queued" });
-            await pollJob(job.id, r.statusUrl, r.responseUrl);
+            track(job.id, r.statusUrl, r.responseUrl);
           } catch (e) {
             patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
           }
@@ -216,12 +198,7 @@ export default function CreatePage() {
           ← Photo tools
         </Link>
       </header>
-      <nav className="mb-6 flex gap-2 border-b border-neutral-200 text-sm">
-        <Link href="/video" className="-mb-px border-b-2 border-transparent px-3 py-2 font-medium text-neutral-500 hover:text-neutral-800">
-          Relight
-        </Link>
-        <span className="-mb-px border-b-2 border-neutral-900 px-3 py-2 font-medium">Create</span>
-      </nav>
+      <VideoNav active="create" />
 
       {/* References */}
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
@@ -286,6 +263,12 @@ export default function CreatePage() {
             </button>
           ))}
         </div>
+        {prefs.some((p) => p.on) && (
+          <label className="mt-2 flex items-center gap-2 text-xs text-neutral-600">
+            <input type="checkbox" checked={usePrefs} onChange={(e) => setUsePrefs(e.target.checked)} />
+            Add my saved preferences ({prefs.filter((p) => p.on).length}) to this prompt
+          </label>
+        )}
         <p className="mt-2 text-xs text-neutral-400">
           You don&apos;t need @Image tags. Each reference is labelled automatically, and a keep-it-exact instruction is added.
         </p>
@@ -361,13 +344,24 @@ export default function CreatePage() {
 
       {jobs.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold">Results</h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Results</h2>
+            <button onClick={clearFinished} className="text-xs text-neutral-500 underline">
+              Clear finished
+            </button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {jobs.map((j) => {
               const engine = CREATE_ENGINES.find((e) => e.id === j.engine);
               return (
                 <div key={j.id} className="rounded-xl border border-neutral-200 bg-white p-3">
-                  <p className="mb-2 text-sm font-medium">{engine?.label}</p>
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">{engine?.label}</p>
+                    <button onClick={() => removeJob(j.id)} title="Remove" className="text-neutral-400 hover:text-red-600">
+                      ✕
+                    </button>
+                  </div>
+                  {j.title && <p className="mb-2 line-clamp-2 text-xs text-neutral-500">{j.title}</p>}
                   {j.status === "done" && j.videoUrl ? (
                     <>
                       <video src={j.videoUrl} controls loop muted className="w-full rounded-lg bg-black" />
