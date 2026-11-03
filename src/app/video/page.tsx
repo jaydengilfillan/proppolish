@@ -10,6 +10,7 @@ import { Job, useVideoStore } from "@/lib/videoStore";
 import VideoNav from "./VideoNav";
 
 interface FrameState {
+  name?: string;
   status: "loading" | "done" | "failed";
   url?: string;
   error?: string;
@@ -189,8 +190,6 @@ export default function VideoPage() {
   const [final, setFinal] = useState(false);
   const [takes, setTakes] = useState(2);
   const [retries, setRetries] = useState(2);
-  const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { jobs: allJobs, addJobs, patchJob, removeJob, clearFinished, track } = useVideoStore();
   const jobs = useMemo(() => allJobs.filter((j) => j.kind === "relight"), [allJobs]);
@@ -211,7 +210,6 @@ export default function VideoPage() {
       const c = await readClip(file);
       setClip(c);
       setSecs(Math.max(2, Math.min(5, Math.floor(c.duration))));
-      setFrames({});
       preparedRef.current = null;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read this video.");
@@ -231,61 +229,76 @@ export default function VideoPage() {
     return total;
   }, [pairs, secs, final, takes]);
 
-  async function generate() {
+  /**
+   * Start a batch in the background. Everything it needs is copied now, the clip
+   * slot is cleared straight away, and the page is free for the next clip while
+   * this one prepares, uploads and generates.
+   */
+  function generate() {
     if (!clip || pairs.length === 0) return;
-    setBusy(true);
     setError(null);
-    try {
-      // 1) prepare + upload the clip (cached per length)
-      const key = `${clip.file.name}-${clip.file.size}-${secs}-${loops}`;
-      let videoUrl = preparedRef.current?.key === key ? preparedRef.current.url : "";
-      if (!videoUrl) {
-        setStage("Preparing the clip… 0%");
-        const blob = await prepareClip(clip.file, secs, (p) => setStage(`Preparing the clip… ${Math.round(p * 100)}%`), loops);
-        setStage("Uploading the clip…");
-        videoUrl = await uploadToFal(blob, `clip-${Date.now()}.mp4`);
-        preparedRef.current = { key, url: videoUrl };
-      }
-
-      // 2) create the job cards
-      const newJobs: Job[] = pairs.flatMap((p) => Array.from({ length: takes }, () => ({
+    const snap = { clip, secs, loops, scene, final, takes, retries, pairs };
+    const batchId = `${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
+    const newJobs: Job[] = snap.pairs.flatMap((p) =>
+      Array.from({ length: snap.takes }, () => ({
         kind: "relight" as const,
         createdAt: Date.now(),
         id: `${Date.now()}-${p.engine.id}-${p.look.id}-${Math.random().toString(36).slice(2, 6)}`,
         engine: p.engine.id,
         look: p.look.id,
+        title: snap.clip.file.name,
         status: "waiting" as const,
-        note: p.engine.needsFrame ? "Waiting for the relit first frame" : "Starting",
-        retriesLeft: retries,
+        note: "Preparing the clip… 0% (keep this tab open)",
+        retriesLeft: snap.retries,
         attempts: 1,
-      })));
-      addJobs(newJobs);
-      setStage("");
+      }))
+    );
+    addJobs(newJobs);
+    setClip(null);
+    preparedRef.current = null;
+    void runBatch(batchId, snap, newJobs);
+  }
 
-      // 3) relit first frames (one per look, shared by the engines that use them)
-      const frameLooks = Array.from(new Set(pairs.filter((p) => p.engine.needsFrame).map((p) => p.look)));
+  async function runBatch(
+    batchId: string,
+    snap: { clip: Clip; secs: number; loops: number; scene: string; final: boolean; pairs: { look: Look; engine: Engine }[] },
+    newJobs: Job[]
+  ) {
+    const { clip: c, secs: sSecs, loops: sLoops, scene: sScene, final: sFinal, pairs: sPairs } = snap;
+    const noteAll = (note: string) => newJobs.forEach((j) => patchJob(j.id, { note }));
+    try {
+      // 1) prepare + upload the clip
+      noteAll("Preparing the clip… 0% (keep this tab open)");
+      const blob = await prepareClip(c.file, sSecs, (p) => noteAll(`Preparing the clip… ${Math.round(p * 100)}% (keep this tab open)`), sLoops);
+      noteAll("Uploading the clip…");
+      const videoUrl = await uploadToFal(blob, `clip-${Date.now()}.mp4`);
+
+      // 2) relit first frames (one per look, shared by the engines that use them)
+      const frameLooks = Array.from(new Set(sPairs.filter((p) => p.engine.needsFrame).map((p) => p.look)));
       const frameUrls: Record<string, string | null> = {};
+      noteAll(frameLooks.length ? "Making the relit first frame…" : "Starting…");
       await Promise.all(
         frameLooks.map(async (look) => {
-          setFrames((f) => ({ ...f, [look.id]: { status: "loading" } }));
+          const fk = `${batchId}|${look.id}`;
+          setFrames((f) => ({ ...f, [fk]: { status: "loading", name: c.file.name } }));
           try {
             const r = await api<{ url: string }>("/api/video/frame", {
-              image: clip.firstFrame,
+              image: c.firstFrame,
               look: look.id,
-              scene,
-              width: clip.width,
-              height: clip.height,
+              scene: sScene,
+              width: c.width,
+              height: c.height,
             });
             frameUrls[look.id] = r.url;
-            setFrames((f) => ({ ...f, [look.id]: { status: "done", url: r.url } }));
+            setFrames((f) => ({ ...f, [fk]: { status: "done", url: r.url, name: c.file.name } }));
           } catch (e) {
             frameUrls[look.id] = null;
-            setFrames((f) => ({ ...f, [look.id]: { status: "failed", error: e instanceof Error ? e.message : "Failed" } }));
+            setFrames((f) => ({ ...f, [fk]: { status: "failed", error: e instanceof Error ? e.message : "Failed", name: c.file.name } }));
           }
         })
       );
 
-      // 4) start every job and poll it
+      // 3) start every job; the shared store tracks and retries them from here
       await Promise.all(
         newJobs.map(async (job) => {
           const engine = ENGINES.find((e) => e.id === job.engine) as Engine;
@@ -299,28 +312,26 @@ export default function VideoPage() {
             const body = {
               engine: engine.id,
               look: look.id,
-              scene,
+              scene: sScene,
               videoUrl,
               frameUrl: frameUrls[look.id] ?? undefined,
               sphereUrl,
-              secs,
-              width: clip.width,
-              height: clip.height,
-              final,
+              secs: sSecs,
+              width: c.width,
+              height: c.height,
+              final: sFinal,
             };
-            patchJob(job.id, { request: { path: "/api/video/start", body } });
+            patchJob(job.id, { request: { path: "/api/video/start", body }, note: "Submitting…" });
             const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", body);
             track(job.id, r.statusUrl, r.responseUrl);
           } catch (e) {
-            patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
+            patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
           }
         })
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-      setStage("");
-    } finally {
-      setBusy(false);
+      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      newJobs.forEach((j) => patchJob(j.id, { status: "failed", error: msg, note: undefined }));
     }
   }
 
@@ -398,7 +409,7 @@ export default function VideoPage() {
                   This clip is {clip.duration.toFixed(1)}s, under the 3s the engines need, so it will be played {loops} times ({secs.toFixed(1)}s total). Each repeat is relit the same way; trim the extra at the end in your edit.
                 </p>
               )}
-              <button onClick={() => { setClip(null); setFrames({}); }} className="w-fit text-xs text-neutral-500 underline">
+              <button onClick={() => { setClip(null); }} className="w-fit text-xs text-neutral-500 underline">
                 Use a different clip
               </button>
             </div>
@@ -504,13 +515,13 @@ export default function VideoPage() {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <button
           onClick={() => void generate()}
-          disabled={!clip || busy || pairs.length === 0}
+          disabled={!clip || pairs.length === 0}
           className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition disabled:opacity-40"
         >
-          {busy ? "Working…" : `Generate ${pairs.length * takes} clip${pairs.length * takes === 1 ? "" : "s"}`}
+          {`Generate ${pairs.length * takes} clip${pairs.length * takes === 1 ? "" : "s"}`}
         </button>
         <span className="text-sm text-neutral-500">Estimated {money(cost)} USD in total (includes relit first frames). Rough, from fal's list prices.</span>
-        {stage && <span className="text-sm text-neutral-700">{stage}</span>}
+        <span className="text-xs text-neutral-400">Generating starts in the background: load your next clip straight away.</span>
       </div>
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -521,7 +532,7 @@ export default function VideoPage() {
           <div className="flex flex-wrap gap-3">
             {Object.entries(frames).map(([id, f]) => (
               <div key={id} className="w-56 rounded-lg border border-neutral-200 bg-white p-2">
-                <p className="mb-1 text-xs font-medium">{LOOKS.find((l) => l.id === id)?.label}</p>
+                <p className="mb-1 text-xs font-medium">{LOOKS.find((l) => l.id === id.split("|")[1])?.label} <span className="font-normal text-neutral-400">· {f.name}</span></p>
                 {f.status === "loading" && <p className="py-8 text-center text-xs text-neutral-500">Generating…</p>}
                 {f.status === "failed" && <p className="text-xs text-red-600">{f.error}</p>}
                 {f.status === "done" && f.url && (
@@ -557,6 +568,7 @@ export default function VideoPage() {
                       ✕
                     </button>
                   </div>
+                  {j.title && <p className="mb-2 truncate text-xs text-neutral-500">{j.title}</p>}
                   {j.status === "done" && j.videoUrl ? (
                     <>
                       <video src={j.videoUrl} controls loop muted className="w-full rounded-lg bg-black" />
