@@ -306,7 +306,7 @@ export default function CreatePage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {EFFECT_PRESETS.filter((p) => p.group === g).map((p) => (
-                  <button key={p.label} onClick={() => { setPrompt(p.text); setStartFromFirst(true); setEngines(["kling4"]); }} className="rounded-full border border-amber-400 bg-white px-3 py-1 text-xs text-amber-800 hover:border-amber-600">
+                  <button key={p.label} onClick={() => { setPrompt(p.text); setStartFromFirst(true); setEngines(["kling4"]); setSecs(p.secs); }} className="rounded-full border border-amber-400 bg-white px-3 py-1 text-xs text-amber-800 hover:border-amber-600">
                     {p.label}
                   </button>
                 ))}
