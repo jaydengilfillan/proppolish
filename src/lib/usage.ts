@@ -89,7 +89,8 @@ export function isAdmin(username: string | null | undefined): boolean {
 
 /** Parse WEEKLY_ALLOWANCES ("NIKO:50,otheruser:75") into a { username: dollars } map. */
 export function getWeeklyAllowances(): Record<string, number> {
-  const raw = process.env.WEEKLY_ALLOWANCES ?? "";
+  // WEEKLY_ALLOWANCES_EXTRA adds allowances without editing the original variable.
+  const raw = [process.env.WEEKLY_ALLOWANCES, process.env.WEEKLY_ALLOWANCES_EXTRA].filter(Boolean).join(",");
   const out: Record<string, number> = {};
   for (const entry of raw.split(",")) {
     const piece = entry.trim();

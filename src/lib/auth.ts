@@ -44,7 +44,11 @@ function toHex(buf: ArrayBuffer): string {
 /** Parse the AUTH_USERS env var into a { username: password } map. Accepts
  * either "user:pass,user:pass" or JSON — see the file-level comment above. */
 export function getUsers(): Record<string, string> {
-  const raw = process.env.AUTH_USERS;
+  // AUTH_USERS_EXTRA ("user:pass,user:pass") adds users without having to edit the write-only AUTH_USERS secret.
+  return { ...parseUsers(process.env.AUTH_USERS), ...parseUsers(process.env.AUTH_USERS_EXTRA) };
+}
+
+function parseUsers(raw: string | undefined): Record<string, string> {
   if (!raw || !raw.trim()) return {};
   const trimmed = raw.trim();
 
