@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildPayload, engineApplies, getEngine } from "@/lib/videoEngines";
-import { getLook } from "@/lib/videoLooks";
+import { getLook, getScene } from "@/lib/videoLooks";
 
 export const dynamic = "force-dynamic";
 
 interface StartBody {
   engine?: unknown;
   look?: unknown;
+  scene?: unknown;
   videoUrl?: unknown;
   frameUrl?: unknown;
   sphereUrl?: unknown;
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     width: typeof body.width === "number" ? body.width : 1280,
     height: typeof body.height === "number" ? body.height : 720,
     final: body.final === true,
-  });
+  }, getScene(typeof body.scene === "string" ? body.scene : undefined));
 
   const resp = await fetch(`https://queue.fal.run/${engine.model}`, {
     method: "POST",
