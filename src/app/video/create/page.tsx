@@ -100,7 +100,7 @@ export default function CreatePage() {
   const [audio, setAudio] = useState(false);
   const [final, setFinal] = useState(false);
   const [takes, setTakes] = useState(1);
-  const [engines, setEngines] = useState<CreateEngineId[]>(["klingpro"]);
+  const [engines, setEngines] = useState<CreateEngineId[]>(["kling3pro"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -297,8 +297,9 @@ export default function CreatePage() {
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
           <label className="flex items-center gap-2">
             Length
-            <input type="range" min={4} max={15} value={secs} onChange={(e) => setSecs(Number(e.target.value))} />
+            <input type="range" min={4} max={30} value={secs} onChange={(e) => setSecs(Number(e.target.value))} />
             <span className="w-8 tabular-nums">{secs}s</span>
+            <span className="text-xs text-neutral-400">(Kling 4.0 up to 30s; others cap at 15s)</span>
           </label>
           <label className="flex items-center gap-2">
             Shape
@@ -322,7 +323,7 @@ export default function CreatePage() {
             <input type="checkbox" checked={audio} onChange={(e) => setAudio(e.target.checked)} /> Generate sound
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={final} onChange={(e) => setFinal(e.target.checked)} /> 1080p (Seedance)
+            <input type="checkbox" checked={final} onChange={(e) => setFinal(e.target.checked)} /> 1080p (Kling 4.0 / Seedance)
           </label>
         </div>
       </section>

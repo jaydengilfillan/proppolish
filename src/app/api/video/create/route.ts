@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
   const aspect = ASPECTS.includes(body.aspect as Aspect) ? (body.aspect as Aspect) : "16:9";
   const secs = typeof body.secs === "number" ? body.secs : 5;
 
-  const input = buildCreatePayload(engine, {
+  let input: Record<string, unknown>;
+  try {
+    input = buildCreatePayload(engine, {
     prompt,
     refs,
     startFromFirst: body.startFromFirst === true && refs.length > 0,
@@ -36,7 +38,10 @@ export async function POST(req: NextRequest) {
     aspect,
     audio: body.audio === true,
     final: body.final === true,
-  });
+    });
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Bad request." }, { status: 400 });
+  }
 
   const resp = await fetch(`https://queue.fal.run/${engine.model}`, {
     method: "POST",
