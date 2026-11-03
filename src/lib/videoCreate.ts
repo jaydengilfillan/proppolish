@@ -177,11 +177,11 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
   lines.push(clean(input.prompt) + ".");
   if (/hyperlapse|time-?lapse/i.test(input.prompt)) {
     lines.push(
-      "Hero-shot cinematic quality: photorealistic, rich dynamic range, natural film colour grade, smooth continuous motion with no flicker, no warping or melting, buildings structurally exact. No text or logos."
+      "Hero-shot cinematic quality: photorealistic, rich dynamic range, natural film colour grade, smooth continuous motion with no flicker, no warping or melting, buildings structurally exact. Do not add, invent or extend any building, structure, land or object that is not in the opening frame, and do not change or restyle anything that is there (a glass balustrade stays the same glass balustrade); open sea, sky and empty ground stay open. The camera moves only as described. No text or logos."
     );
   } else {
     lines.push(
-      "Keep the property's architecture and every reference exactly as shown in the images, with no warping or melting (lighting and sky may change only as the prompt describes). Realistic physics, stable camera, photorealistic, no text or logos added."
+      "Keep the property's architecture and every reference exactly as shown in the images, with no warping or melting (lighting and sky may change only as the prompt describes). Do not add, invent or extend any building, structure, land or object that is not in the references, and do not change or restyle anything that is there. Realistic physics, stable camera, photorealistic, no text or logos added."
     );
   }
   return lines.join(" ");
