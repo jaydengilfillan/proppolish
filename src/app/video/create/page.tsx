@@ -90,7 +90,9 @@ export default function CreatePage() {
   const [aspect, setAspect] = useState<Aspect>("16:9");
   const [audio, setAudio] = useState(false);
   const [final, setFinal] = useState(false);
-  const [takes, setTakes] = useState(1);
+  const [takes, setTakes] = useState(3);
+  const [retries, setRetries] = useState(2);
+  const uploaded = useRef<Record<string, string>>({});
   const [engines, setEngines] = useState<CreateEngineId[]>(["kling3pro"]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +135,13 @@ export default function CreatePage() {
     setBusy(true);
     setError(null);
     try {
-      const urls = await Promise.all(refs.map((r, i) => uploadToFal(r.blob, `ref-${i + 1}.jpg`)));
+      // upload each reference once; later batches reuse the same fal URLs
+      const urls = await Promise.all(
+        refs.map(async (r, i) => {
+          if (!uploaded.current[r.id]) uploaded.current[r.id] = await uploadToFal(r.blob, `ref-${i + 1}.jpg`);
+          return uploaded.current[r.id];
+        })
+      );
       const payloadRefs = refs.map((r, i) => ({ url: urls[i], label: r.label }));
       const params = { prompt, refs: payloadRefs, startFromFirst, secs, aspect, audio, final };
       const prefBlock = usePrefs ? prefsText() : "";
@@ -148,22 +156,19 @@ export default function CreatePage() {
           status: "waiting" as const,
           createdAt: Date.now(),
           params,
+          retriesLeft: retries,
+          attempts: 1,
+          request: {
+            path: "/api/video/create",
+            body: { engine: e.id, prompt: sentPrompt, refs: payloadRefs, startFromFirst, secs, aspect, audio, final },
+          },
         }))
       );
       addJobs(newJobs);
       await Promise.all(
         newJobs.map(async (job) => {
           try {
-            const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", {
-              engine: job.engine,
-              prompt: sentPrompt,
-              refs: payloadRefs,
-              startFromFirst,
-              secs,
-              aspect,
-              audio,
-              final,
-            });
+            const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", (job.request as { body: unknown }).body);
             track(job.id, r.statusUrl, r.responseUrl);
           } catch (e) {
             patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
@@ -292,14 +297,23 @@ export default function CreatePage() {
               <option value="1:1">1:1 square</option>
             </select>
           </label>
-          <label className="flex items-center gap-2">
-            Takes each
-            <select value={takes} onChange={(e) => setTakes(Number(e.target.value))} className="rounded border border-neutral-300 px-2 py-1">
-              {[1, 2, 3].map((n) => (
-                <option key={n} value={n}>
+          <div className="flex items-center gap-2">
+            <span>Run at once</span>
+            <div className="flex overflow-hidden rounded border border-neutral-300">
+              {[1, 2, 3, 4].map((n) => (
+                <button key={n} onClick={() => setTakes(n)} className={`px-3 py-1 ${takes === n ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>
                   {n}
-                </option>
+                </button>
               ))}
+            </div>
+            <span className="text-xs text-neutral-400">per engine, all at the same time</span>
+          </div>
+          <label className="flex items-center gap-2">
+            Auto-retry failures
+            <select value={retries} onChange={(e) => setRetries(Number(e.target.value))} className="rounded border border-neutral-300 px-2 py-1">
+              <option value={0}>Off</option>
+              <option value={1}>1 time</option>
+              <option value={2}>2 times</option>
             </select>
           </label>
           <label className="flex items-center gap-2">

@@ -38,6 +38,11 @@ export interface Job {
   createdAt: number;
   /** Original inputs of a Create job, so it can be re-run with a change. */
   params?: CreateParams;
+  /** How to resubmit this job if fal fails it (endpoint + body). */
+  request?: { path: string; body: unknown };
+  /** Automatic resubmits still available. */
+  retriesLeft?: number;
+  attempts?: number;
   /** For Edit jobs: the job this was made from and what was asked. */
   parentId?: string;
   change?: string;
@@ -123,10 +128,38 @@ export function VideoProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<{ text: string; n: number }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const polling = useRef<Set<string>>(new Set());
+  const jobsRef = useRef<Job[]>([]);
+  jobsRef.current = jobs;
 
   const patchJob = useCallback((id: string, patch: Partial<Job>) => {
     setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
+
+  // forward declaration so poll and failOrRetry can call each other
+  const pollRef = useRef<(id: string, statusUrl: string, responseUrl: string) => Promise<void>>(async () => {});
+
+  /** On failure: silently resubmit the same request (if allowed), otherwise show the error. */
+  const failOrRetry = useCallback(
+    async (id: string, error?: string) => {
+      const job = jobsRef.current.find((j) => j.id === id);
+      const permanent = /\(4\d\d\)|refused|content|filter|blocked|too short|too long|duration/i.test(error ?? "");
+      if (job?.request && (job.retriesLeft ?? 0) > 0 && !permanent) {
+        const attempt = (job.attempts ?? 1) + 1;
+        patchJob(id, { note: `Attempt ${attempt - 1} failed, retrying automatically…`, retriesLeft: (job.retriesLeft ?? 1) - 1, attempts: attempt, status: "queued" });
+        try {
+          const r = await api<{ statusUrl: string; responseUrl: string }>(job.request.path, job.request.body);
+          patchJob(id, { statusUrl: r.statusUrl, responseUrl: r.responseUrl });
+          polling.current.delete(id);
+          void pollRef.current(id, r.statusUrl, r.responseUrl);
+          return;
+        } catch (e) {
+          return patchJob(id, { status: "failed", error: e instanceof Error ? e.message : error, note: undefined });
+        }
+      }
+      patchJob(id, { status: "failed", error: job?.attempts && job.attempts > 1 ? `${error ?? "Failed"} (after ${job.attempts} attempts)` : error, note: undefined });
+    },
+    [patchJob]
+  );
 
   const poll = useCallback(
     async (id: string, statusUrl: string, responseUrl: string) => {
@@ -141,7 +174,7 @@ export function VideoProvider({ children }: { children: ReactNode }) {
               `/api/video/status?statusUrl=${encodeURIComponent(statusUrl)}&responseUrl=${encodeURIComponent(responseUrl)}`
             );
             if (r.status === "DONE") return patchJob(id, { status: "done", videoUrl: r.videoUrl, note: undefined, error: undefined });
-            if (r.status === "FAILED") return patchJob(id, { status: "failed", error: r.error, note: undefined });
+            if (r.status === "FAILED") return failOrRetry(id, r.error);
             patchJob(id, {
               status: r.status === "IN_QUEUE" ? "queued" : "running",
               note: r.status === "IN_QUEUE" && typeof r.position === "number" ? `Waiting in line (${r.position + 1})` : undefined,
@@ -150,13 +183,14 @@ export function VideoProvider({ children }: { children: ReactNode }) {
             patchJob(id, { note: e instanceof Error ? e.message : "Retrying…" });
           }
         }
-        patchJob(id, { status: "failed", error: "Took too long. Check fal.ai and try again." });
+        return failOrRetry(id, "Took too long. Check fal.ai and try again.");
       } finally {
         polling.current.delete(id);
       }
     },
-    [patchJob]
+    [patchJob, failOrRetry]
   );
+  pollRef.current = poll;
 
   // load once after mount, then resume any jobs that were still running
   useEffect(() => {
