@@ -100,7 +100,11 @@ async function readClip(file: File): Promise<Clip> {
  * 480p-720p, 2-15s, under 50 MB). Plays the clip into a canvas and records it,
  * so it takes about as long as the clip itself.
  */
-async function prepareClip(file: File, secs: number, onProgress: (p: number) => void): Promise<Blob> {
+/** Clips shorter than this are looped to reach the engines' 3s minimum. */
+const SHORT_CLIP = 3.4;
+const LOOP_TARGET = 3.6;
+
+async function prepareClip(file: File, secs: number, onProgress: (p: number) => void, loops = 1): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const video = await loadVideo(url);
@@ -117,7 +121,7 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     );
     if (!mime) throw new Error("This browser can't make MP4 clips. Use Chrome or Safari.");
     // Record a little over the chosen length: the recorder stops a few frames early, and engines reject clips even 0.02s under their 3s minimum.
-    const dur = Math.min(video.duration, secs + 0.6, 15);
+    const dur = loops > 1 ? video.duration * loops : Math.min(video.duration, secs + 0.6, 15);
     const recorder = new MediaRecorder(canvas.captureStream(24), { mimeType: mime, videoBitsPerSecond: 12_000_000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
@@ -137,8 +141,22 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     await new Promise<void>((resolve) => {
       const tick = () => {
         ctx.drawImage(video, 0, 0, w, h);
-        onProgress(Math.min(1, video.currentTime / dur));
-        if (video.currentTime >= dur - 0.04 || video.ended || performance.now() - started > (dur * 2 + 15) * 1000) {
+        const elapsed = (performance.now() - started) / 1000;
+        if (loops > 1) {
+          // short clip: play it again from the start until the target length is recorded
+          onProgress(Math.min(1, elapsed / dur));
+          if ((video.ended || video.currentTime >= video.duration - 0.04) && elapsed < dur - 0.1) {
+            video.currentTime = 0;
+            void video.play();
+          }
+          if (elapsed >= dur - 0.02 || elapsed > dur * 2 + 15) {
+            resolve();
+            return;
+          }
+        } else {
+          onProgress(Math.min(1, video.currentTime / dur));
+        }
+        if (loops <= 1 && (video.currentTime >= dur - 0.04 || video.ended || elapsed > (dur * 2 + 15))) {
           resolve();
           return;
         }
@@ -161,7 +179,10 @@ function money(n: number): string {
 
 export default function VideoPage() {
   const [clip, setClip] = useState<Clip | null>(null);
-  const [secs, setSecs] = useState(5);
+  const [secsSel, setSecs] = useState(5);
+  // Clips under ~3.4s are played more than once so they reach the 3s engine minimum (trim the repeat afterwards).
+  const loops = clip && clip.duration < SHORT_CLIP ? Math.ceil(LOOP_TARGET / clip.duration) : 1;
+  const secs = clip && loops > 1 ? clip.duration * loops : secsSel;
   const [scene, setScene] = useState("auto");
   const [looks, setLooks] = useState<string[]>(["sunny"]);
   const [engines, setEngines] = useState<EngineId[]>(["klingpro"]);
@@ -216,11 +237,11 @@ export default function VideoPage() {
     setError(null);
     try {
       // 1) prepare + upload the clip (cached per length)
-      const key = `${clip.file.name}-${clip.file.size}-${secs}`;
+      const key = `${clip.file.name}-${clip.file.size}-${secs}-${loops}`;
       let videoUrl = preparedRef.current?.key === key ? preparedRef.current.url : "";
       if (!videoUrl) {
         setStage("Preparing the clip… 0%");
-        const blob = await prepareClip(clip.file, secs, (p) => setStage(`Preparing the clip… ${Math.round(p * 100)}%`));
+        const blob = await prepareClip(clip.file, secs, (p) => setStage(`Preparing the clip… ${Math.round(p * 100)}%`), loops);
         setStage("Uploading the clip…");
         videoUrl = await uploadToFal(blob, `clip-${Date.now()}.mp4`);
         preparedRef.current = { key, url: videoUrl };
@@ -358,18 +379,25 @@ export default function VideoPage() {
                   {clip.width}×{clip.height} · {clip.duration.toFixed(1)}s
                 </p>
               </div>
+              {loops === 1 && (
               <label className="flex items-center gap-2">
                 <span className="text-neutral-600">Use the first</span>
                 <input
                   type="number"
                   min={2}
                   max={Math.min(MAX_SECS, Math.floor(clip.duration))}
-                  value={secs}
+                  value={secsSel}
                   onChange={(e) => setSecs(Math.max(2, Math.min(MAX_SECS, Math.floor(clip.duration), Number(e.target.value) || 2)))}
                   className="w-16 rounded-md border border-neutral-300 px-2 py-1"
                 />
                 <span className="text-neutral-600">seconds (max {MAX_SECS}; cost scales with length)</span>
               </label>
+              )}
+              {loops > 1 && clip && (
+                <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  This clip is {clip.duration.toFixed(1)}s, under the 3s the engines need, so it will be played {loops} times ({secs.toFixed(1)}s total). Each repeat is relit the same way; trim the extra at the end in your edit.
+                </p>
+              )}
               <button onClick={() => { setClip(null); setFrames({}); }} className="w-fit text-xs text-neutral-500 underline">
                 Use a different clip
               </button>
