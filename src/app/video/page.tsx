@@ -166,6 +166,8 @@ export default function VideoPage() {
   const [looks, setLooks] = useState<string[]>(["sunny"]);
   const [engines, setEngines] = useState<EngineId[]>(["klingpro"]);
   const [final, setFinal] = useState(false);
+  const [takes, setTakes] = useState(2);
+  const [retries, setRetries] = useState(2);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -204,9 +206,9 @@ export default function VideoPage() {
   const cost = useMemo(() => {
     const frameLooks = new Set(pairs.filter((p) => p.engine.needsFrame).map((p) => p.look.id));
     let total = frameLooks.size * FRAME_COST_USD;
-    for (const p of pairs) total += estimateUsd(p.engine, Math.min(secs, p.engine.maxSecs), final);
+    for (const p of pairs) total += estimateUsd(p.engine, Math.min(secs, p.engine.maxSecs), final) * takes;
     return total;
-  }, [pairs, secs, final]);
+  }, [pairs, secs, final, takes]);
 
   async function generate() {
     if (!clip || pairs.length === 0) return;
@@ -225,7 +227,7 @@ export default function VideoPage() {
       }
 
       // 2) create the job cards
-      const newJobs: Job[] = pairs.map((p) => ({
+      const newJobs: Job[] = pairs.flatMap((p) => Array.from({ length: takes }, () => ({
         kind: "relight" as const,
         createdAt: Date.now(),
         id: `${Date.now()}-${p.engine.id}-${p.look.id}-${Math.random().toString(36).slice(2, 6)}`,
@@ -233,7 +235,9 @@ export default function VideoPage() {
         look: p.look.id,
         status: "waiting" as const,
         note: p.engine.needsFrame ? "Waiting for the relit first frame" : "Starting",
-      }));
+        retriesLeft: retries,
+        attempts: 1,
+      })));
       addJobs(newJobs);
       setStage("");
 
@@ -271,7 +275,7 @@ export default function VideoPage() {
               sphereUrl = await uploadToFal(await dataUriToBlob(renderSphere(look)), `sphere-${look.id}.png`);
             }
             if (engine.needsFrame && !frameUrls[look.id]) throw new Error("The relit first frame failed, so this one couldn't start.");
-            const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", {
+            const body = {
               engine: engine.id,
               look: look.id,
               scene,
@@ -282,7 +286,9 @@ export default function VideoPage() {
               width: clip.width,
               height: clip.height,
               final,
-            });
+            };
+            patchJob(job.id, { request: { path: "/api/video/start", body } });
+            const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", body);
             track(job.id, r.statusUrl, r.responseUrl);
           } catch (e) {
             patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
@@ -440,6 +446,32 @@ export default function VideoPage() {
         </label>
       </section>
 
+      {/* Parallel runs */}
+      <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold">Run several at once</h2>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span>Takes per look and engine</span>
+            <div className="flex overflow-hidden rounded border border-neutral-300">
+              {[1, 2, 3, 4].map((n) => (
+                <button key={n} onClick={() => setTakes(n)} className={`px-3 py-1 ${takes === n ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2">
+            Auto-retry failures
+            <select value={retries} onChange={(e) => setRetries(Number(e.target.value))} className="rounded border border-neutral-300 px-2 py-1">
+              <option value={0}>Off</option>
+              <option value={1}>1 time</option>
+              <option value={2}>2 times</option>
+            </select>
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-neutral-400">All takes start together, so the first good one is ready in one wait instead of several. Failed takes resubmit themselves.</p>
+      </section>
+
       {/* Go */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <button
@@ -447,7 +479,7 @@ export default function VideoPage() {
           disabled={!clip || busy || pairs.length === 0}
           className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition disabled:opacity-40"
         >
-          {busy ? "Working…" : `Generate ${pairs.length} clip${pairs.length === 1 ? "" : "s"}`}
+          {busy ? "Working…" : `Generate ${pairs.length * takes} clip${pairs.length * takes === 1 ? "" : "s"}`}
         </button>
         <span className="text-sm text-neutral-500">Estimated {money(cost)} USD in total (includes relit first frames). Rough, from fal's list prices.</span>
         {stage && <span className="text-sm text-neutral-700">{stage}</span>}
