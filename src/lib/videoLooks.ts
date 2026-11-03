@@ -179,6 +179,13 @@ export function getLook(id: string): Look | undefined {
 }
 
 /** Prompt for the Nano Banana relight of the clip's first frame. */
+/**
+ * Hard fidelity rules appended to every relight prompt. Models like to "complete" a scene: invent buildings along the
+ * horizon, swap a glass balustrade for a different one, drift the camera. These forbid that explicitly.
+ */
+export const HARD_RULES =
+  "HARD RULES, never break them: (1) Do not add, invent, extend or duplicate ANY building, tower, structure, land, headland, mountain, boat, person, vehicle or object, especially at or near the horizon and in the distance. First scan the whole frame and note exactly what is there: whatever is open sea, sky or empty ground must stay open sea, sky or empty ground, and nothing new may appear in front of or behind the existing view. (2) Do not change, replace or restyle anything that exists: balustrades, glass, railings, furniture, finishes, colours, shapes and proportions stay exactly as in the source (a glass balustrade stays the same glass balustrade). (3) The camera position, direction, angle, perspective, framing, crop and camera movement stay identical to the source for the whole clip, with no re-framing, no turning, no extra movement.";
+
 export function framePrompt(look: Look, scene?: Scene, extra?: string): string {
   const strength =
     look.group === "cinematic"
@@ -186,17 +193,17 @@ export function framePrompt(look: Look, scene?: Scene, extra?: string): string {
       : "Keep the result natural, clean and believable, the way a skilled photographer would shoot it in this light.";
   return `Use the supplied video frame as the exact base image. Keep the architecture, every object, the camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign anything. This is a lighting and sky change only.
 
-Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)}${extra ? " " + extra : ""} Make the sky, the direction and colour of the light, the shadows, the reflections and the glow of lights all agree with this lighting, on every surface. Keep fine detail, text and textures sharp. No people or objects that are not already in the frame. Photorealistic.`;
+Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)}${extra ? " " + extra : ""} Make the sky, the direction and colour of the light, the shadows, the reflections and the glow of lights all agree with this lighting, on every surface. Keep fine detail, text and textures sharp. No people or objects that are not already in the frame. Photorealistic.\n\n${HARD_RULES}`;
 }
 
 /** Prompt for Seedance's video edit. @Video1 is the clip, @Image1 the relit first frame. */
 export function seedancePrompt(look: Look, scene?: Scene, extra?: string): string {
-  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people.`;
+  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people. ${HARD_RULES}`;
 }
 
 /** Short prompt for engines that take a relit first frame (ID-V2V). */
 export function relightPrompt(look: Look, scene?: Scene, extra?: string): string {
-  return `${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Photorealistic, the same lighting held steady throughout the clip, stable architecture, no flicker.`;
+  return `${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Photorealistic, the same lighting held steady throughout the clip, stable architecture, no flicker. ${HARD_RULES}`;
 }
 
 /** Draw the lighting sphere MiniMax reads the light from. Browser only. */
