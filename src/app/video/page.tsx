@@ -140,27 +140,47 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     await video.play();
     const started = performance.now();
     await new Promise<void>((resolve) => {
-      const tick = () => {
-        ctx.drawImage(video, 0, 0, w, h);
+      let finished = false;
+      let watchdog = 0;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        window.clearInterval(watchdog);
+        video.removeEventListener("ended", onEnded);
+        resolve();
+      };
+      // Reached the end of the source while still short of the target: loop it (short clips) or stop (everything else).
+      const onEnded = () => {
+        if (loops > 1 && (performance.now() - started) / 1000 < dur - 0.1) {
+          video.currentTime = 0;
+          void video.play();
+        } else {
+          finish();
+        }
+      };
+      video.addEventListener("ended", onEnded);
+      const check = () => {
         const elapsed = (performance.now() - started) / 1000;
         if (loops > 1) {
-          // short clip: play it again from the start until the target length is recorded
           onProgress(Math.min(1, elapsed / dur));
-          if ((video.ended || video.currentTime >= video.duration - 0.04) && elapsed < dur - 0.1) {
+          if (video.currentTime >= video.duration - 0.04 && elapsed < dur - 0.1) {
             video.currentTime = 0;
             void video.play();
           }
-          if (elapsed >= dur - 0.02 || elapsed > dur * 2 + 15) {
-            resolve();
-            return;
-          }
+          if (elapsed >= dur - 0.02) finish();
         } else {
           onProgress(Math.min(1, video.currentTime / dur));
+          if (video.currentTime >= dur - 0.04 || video.ended) finish();
         }
-        if (loops <= 1 && (video.currentTime >= dur - 0.04 || video.ended || elapsed > (dur * 2 + 15))) {
-          resolve();
-          return;
-        }
+        if (elapsed > dur * 2 + 15) finish(); // hard stop
+      };
+      // Watchdog: frame callbacks stop when the video ends or the tab is hidden, so never rely on them alone.
+      watchdog = window.setInterval(check, 200);
+      const tick = () => {
+        if (finished) return;
+        ctx.drawImage(video, 0, 0, w, h);
+        check();
+        if (finished) return;
         if ("requestVideoFrameCallback" in video) (video as HTMLVideoElement).requestVideoFrameCallback(tick);
         else requestAnimationFrame(tick);
       };
