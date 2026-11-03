@@ -108,19 +108,49 @@ export const PROMPT_STARTERS: { label: string; text: string }[] = [
 ];
 
 /**
- * One-click effects, run on a still frame of the drone shot as the opening frame.
+ * One-click HERO effects, run on a still frame of the drone shot as the opening frame.
  * Time-lapse = camera LOCKED OFF, time passes. Hyperlapse = camera TRAVELS through the scene while time speeds up.
+ * Written as cinematic directions (camera, sky, light sequence, lights, hold) so the model makes a statement, not a weak dissolve.
  */
 export type EffectGroup = "Time-lapse" | "Hyperlapse";
-export const EFFECT_PRESETS: { group: EffectGroup; label: string; text: string }[] = [
-  { group: "Time-lapse", label: "Sun rises", text: "Time-lapse with a completely locked-off, static camera: the sun starts just below the horizon and climbs steadily higher in the sky, the light shifting from deep orange to bright gold. Waves roll in naturally onto the shore, soft clouds drift. Camera does not move. Do not add mountains or any new landforms." },
-  { group: "Time-lapse", label: "Sunset", text: "Time-lapse with a completely locked-off, static camera: the sun sinks slowly toward the horizon, the sky turning from gold to deep orange and pink, shadows lengthening, waves rolling in naturally. Camera does not move. Do not add mountains or any new landforms." },
-  { group: "Time-lapse", label: "Day to dusk", text: "Time-lapse with a locked-off, static camera: bright daylight fades to blue hour and dusk, windows and lights in the buildings glow warm, clouds and waves move naturally." },
-  { group: "Time-lapse", label: "Clouds racing", text: "Time-lapse with a locked-off, static camera: clouds race across the sky, sunlight and shadows sweep across the scene, water moves naturally." },
-  { group: "Hyperlapse", label: "Sun rises + glide", text: "Drone hyperlapse: the camera glides smoothly and steadily forward along the coast at fast-forward speed while time passes, the sun rising from just below the horizon to higher in the sky, light shifting from deep orange to gold, waves rolling in naturally. Smooth continuous motion. Do not add mountains or any new landforms." },
-  { group: "Hyperlapse", label: "Sunset + glide", text: "Drone hyperlapse: the camera glides smoothly forward at fast-forward speed while the sun sinks toward the horizon and the sky shifts from gold to orange and pink, waves rolling in naturally. Smooth continuous motion. Do not add mountains or any new landforms." },
-  { group: "Hyperlapse", label: "Orbit the property", text: "Drone hyperlapse: the camera orbits smoothly around the property at fast-forward speed while the daylight slowly shifts toward golden hour, clouds drifting. Keep the buildings exact." },
-  { group: "Hyperlapse", label: "Push-in + dusk", text: "Drone hyperlapse: a fast smooth push-in toward the property while the sky moves from daylight to dusk and the windows light up warm." },
+export interface EffectPreset { group: EffectGroup; label: string; secs: number; text: string }
+
+const NO_LAND = "Do not add mountains, hills or any new landforms; keep the coastline and every building exactly as in the opening frame.";
+const NIGHT_LIGHTS = "As twilight turns to night, the windows, balconies, street lights and building lights switch on smoothly and warmly, one after another, until the whole scene glows against a deep blue-black sky with a few stars.";
+
+export const EFFECT_PRESETS: EffectPreset[] = [
+  {
+    group: "Time-lapse", label: "Day to night (hero)", secs: 14,
+    text: `Cinematic hero time-lapse with a completely locked-off static camera. At 100x speed, dramatic layered clouds roll across the frame from right to left while the scene travels from a bright sunny day, into golden hour with long warm shadows, a deep orange and pink sunset, blue hour twilight, and finally into full night. ${NIGHT_LIGHTS} Sunlight and shadows sweep across the buildings realistically, and the water catches every colour change as waves roll in naturally. The night scene holds perfectly still for the final 2 seconds. ${NO_LAND}`,
+  },
+  {
+    group: "Time-lapse", label: "Sun rises (hero)", secs: 10,
+    text: `Cinematic hero time-lapse with a locked-off static camera. At 100x speed the sun climbs from just below the horizon to high in the sky: the first deep orange glow floods the sky and water, then the light warms to gold and finally clears to bright clean daylight, with clouds streaming across the frame from right to left and long shadows shortening across the buildings. Waves roll in naturally onto the shore. ${NO_LAND}`,
+  },
+  {
+    group: "Time-lapse", label: "Golden hour to night", secs: 12,
+    text: `Cinematic hero time-lapse, locked-off static camera. At 100x speed the golden hour sun sinks to the horizon, the sky burns orange then pink then deep blue-hour violet, clouds rolling right to left across the frame. ${NIGHT_LIGHTS} The final night frame holds still for 2 seconds. ${NO_LAND}`,
+  },
+  {
+    group: "Time-lapse", label: "Clouds racing", secs: 8,
+    text: `Cinematic hero time-lapse, locked-off static camera. At 100x speed huge sculpted clouds race across the sky from right to left, sunlight and cloud shadows sweeping across the buildings and water, the light slowly warming toward golden hour. Natural wave motion. ${NO_LAND}`,
+  },
+  {
+    group: "Hyperlapse", label: "Day to night glide (hero)", secs: 15,
+    text: `Cinematic hero drone hyperlapse. The camera glides smoothly and continuously forward along the shot at fast-forward speed while, at 100x speed, dramatic clouds roll across the frame from right to left and the scene travels from a bright sunny day, into golden hour, a deep orange sunset, blue hour twilight and then full night. ${NIGHT_LIGHTS} The camera motion stays smooth and steady throughout, parallax rich and powerful. The night scene holds for the final 2 seconds. ${NO_LAND}`,
+  },
+  {
+    group: "Hyperlapse", label: "Sun rises + glide (hero)", secs: 12,
+    text: `Cinematic hero drone hyperlapse. The camera glides smoothly forward at fast-forward speed while, at 100x speed, the sun rises from just below the horizon to high in the sky: deep orange light turning gold then bright daylight, clouds streaming right to left, long shadows shortening, waves rolling in naturally. Smooth continuous motion with strong parallax. ${NO_LAND}`,
+  },
+  {
+    group: "Hyperlapse", label: "Orbit, day to night", secs: 15,
+    text: `Cinematic hero drone hyperlapse orbiting smoothly around the property at fast-forward speed while, at 100x speed, the day moves from bright sun, to golden hour, to sunset, to blue hour and to night. ${NIGHT_LIGHTS} Clouds roll across the sky, the orbit stays perfectly smooth, and the buildings stay structurally exact. The night scene holds for the final 2 seconds.`,
+  },
+  {
+    group: "Hyperlapse", label: "Push-in to night", secs: 12,
+    text: `Cinematic hero drone hyperlapse: a fast, smooth, powerful push-in toward the property while, at 100x speed, the sky moves from sunny day through golden hour and blue hour into night. ${NIGHT_LIGHTS} Clouds roll right to left. The final night frame holds for 2 seconds. ${NO_LAND}`,
+  },
 ];
 
 const clean = (s: string) => s.trim().replace(/[.\s]+$/g, "");
@@ -145,9 +175,15 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
     }
   });
   lines.push(clean(input.prompt) + ".");
-  lines.push(
-    "Keep the property's architecture and every reference exactly as shown in the images, with no warping or melting (lighting and sky may change only as the prompt describes). Realistic physics, stable camera, photorealistic, no text or logos added."
-  );
+  if (/hyperlapse|time-?lapse/i.test(input.prompt)) {
+    lines.push(
+      "Hero-shot cinematic quality: photorealistic, rich dynamic range, natural film colour grade, smooth continuous motion with no flicker, no warping or melting, buildings structurally exact. No text or logos."
+    );
+  } else {
+    lines.push(
+      "Keep the property's architecture and every reference exactly as shown in the images, with no warping or melting (lighting and sky may change only as the prompt describes). Realistic physics, stable camera, photorealistic, no text or logos added."
+    );
+  }
   return lines.join(" ");
 }
 
