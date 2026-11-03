@@ -5,7 +5,7 @@
  */
 import { Look, relightPrompt, seedancePrompt } from "./videoLooks";
 
-export type EngineId = "seedance" | "idv2v" | "h3max" | "ltxnight";
+export type EngineId = "klingpro" | "klingstd" | "seedance" | "idv2v" | "h3max" | "ltxnight";
 
 export interface EngineInput {
   videoUrl: string;
@@ -27,9 +27,33 @@ export interface Engine {
   nightOnly: boolean;
   /** Longest source clip (seconds) the engine accepts. */
   maxSecs: number;
+  /** Shortest source clip (seconds) the engine accepts. */
+  minSecs?: number;
 }
 
 export const ENGINES: Engine[] = [
+  {
+    id: "klingpro",
+    label: "Kling 3.0 Omni Edit (Pro)",
+    blurb: "The Kling edit you use on Higgsfield. 3-15s clips.",
+    model: "fal-ai/kling-video/o3/pro/video-to-video/edit",
+    needsFrame: true,
+    needsSphere: false,
+    nightOnly: false,
+    maxSecs: 15,
+    minSecs: 3,
+  },
+  {
+    id: "klingstd",
+    label: "Kling 3.0 Omni Edit (Standard)",
+    blurb: "Same edit, cheaper tier. 3-15s clips.",
+    model: "fal-ai/kling-video/o3/standard/video-to-video/edit",
+    needsFrame: true,
+    needsSphere: false,
+    nightOnly: false,
+    maxSecs: 15,
+    minSecs: 3,
+  },
   {
     id: "seedance",
     label: "Seedance 2.0",
@@ -83,6 +107,10 @@ export function engineApplies(engine: Engine, look: Look): boolean {
 /** Rough USD estimate for one clip, from each model's fal price. */
 export function estimateUsd(engine: Engine, secs: number, final: boolean): number {
   switch (engine.id) {
+    case "klingpro":
+      return secs * 0.168;
+    case "klingstd":
+      return secs * 0.126;
     case "seedance": {
       const w = final ? 1920 : 1280, h = final ? 1080 : 720;
       const tokens = ((w * h * 24 * secs) / 1024) * 2; // input + output video
@@ -102,6 +130,14 @@ export const FRAME_COST_USD = 0.15;
 export function buildPayload(engine: Engine, look: Look, input: EngineInput): Record<string, unknown> {
   const frames = Math.max(9, Math.round(input.secs * 24));
   switch (engine.id) {
+    case "klingpro":
+    case "klingstd":
+      return {
+        prompt: seedancePrompt(look),
+        video_url: input.videoUrl,
+        image_urls: input.frameUrl ? [input.frameUrl] : [],
+        keep_audio: false,
+      };
     case "seedance":
       return {
         prompt: seedancePrompt(look),
