@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError, nearestFalAspectRatio } from "@/lib/fal";
-import { framePrompt, getLook } from "@/lib/videoLooks";
+import { framePrompt, getLook, getScene } from "@/lib/videoLooks";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 /** Relights the clip's first frame (Nano Banana Pro) so the video engines have a look to follow. */
 export async function POST(req: NextRequest) {
-  let body: { image?: unknown; look?: unknown; width?: unknown; height?: unknown };
+  let body: { image?: unknown; look?: unknown; scene?: unknown; width?: unknown; height?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const height = typeof body.height === "number" ? body.height : undefined;
   try {
     const url = await falEdit({
-      prompt: framePrompt(look),
+      prompt: framePrompt(look, getScene(typeof body.scene === "string" ? body.scene : undefined)),
       imageUrls: [body.image],
       resolution: "2K",
       aspectRatio: nearestFalAspectRatio(width, height),
