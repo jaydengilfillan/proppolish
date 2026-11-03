@@ -32,6 +32,48 @@ export interface Look {
   sphere: SphereSpec;
 }
 
+export interface Scene {
+  id: string;
+  label: string;
+  blurb: string;
+  /** Extra direction for the prompts; empty for auto. */
+  note: string;
+}
+
+export const SCENES: Scene[] = [
+  { id: "auto", label: "Auto", blurb: "Let the model judge", note: "" },
+  {
+    id: "outdoor",
+    label: "Outdoor",
+    blurb: "Exterior, garden, facade",
+    note: "This is an outdoor / exterior scene. Prioritise the sky, the sun or moon direction, and how the light falls on the building, landscaping and lawn. Keep lawn and plants natural.",
+  },
+  {
+    id: "indoor",
+    label: "Indoor",
+    blurb: "Rooms, interiors",
+    note: "This is an indoor scene. Light the room as that time of day would: change the daylight coming through windows and doors and the colour of the light on walls, floors and furniture, and switch interior lamps on or off to suit. Keep the room's layout and finishes exactly the same, and keep any view through windows believable.",
+  },
+  {
+    id: "pool",
+    label: "Pool",
+    blurb: "Pool and water",
+    note: "This scene features a swimming pool. Pay special attention to the water: colour, clarity, sparkle and reflections should match the lighting, and underwater pool lights should glow when it is dusk or night. Keep the pool shape, tiles and surrounds unchanged.",
+  },
+  {
+    id: "view",
+    label: "View / balcony",
+    blurb: "Skyline, ocean, horizon",
+    note: "This scene is built around a view (balcony, skyline, ocean or horizon). Treat the sky and the distant view as the hero: relight the horizon, clouds, water and distant buildings so they match, and let the light wrap naturally onto the foreground balcony, glass and furniture.",
+  },
+];
+
+export function getScene(id?: string): Scene {
+  return SCENES.find((s) => s.id === id) ?? SCENES[0];
+}
+
+const sceneLine = (scene?: Scene) => (scene && scene.note ? ` ${scene.note}` : "");
+
 export const LOOKS: Look[] = [
   {
     id: "sunny",
@@ -110,24 +152,24 @@ export function getLook(id: string): Look | undefined {
 }
 
 /** Prompt for the Nano Banana relight of the clip's first frame. */
-export function framePrompt(look: Look): string {
+export function framePrompt(look: Look, scene?: Scene): string {
   const strength =
     look.group === "cinematic"
       ? "Push the lighting to a dramatic, high-end, cinematic standard."
       : "Keep the result natural, clean and believable, the way a skilled photographer would shoot it in this light.";
   return `Use the supplied video frame as the exact base image. Keep the architecture, every object, the camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign anything. This is a lighting and sky change only.
 
-Relight the whole scene as ${look.video}. ${strength} Make the sky, the direction and colour of the light, the shadows, the reflections and the glow of lights all agree with this lighting, on every surface. Keep fine detail, text and textures sharp. No people or objects that are not already in the frame. Photorealistic.`;
+Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)} Make the sky, the direction and colour of the light, the shadows, the reflections and the glow of lights all agree with this lighting, on every surface. Keep fine detail, text and textures sharp. No people or objects that are not already in the frame. Photorealistic.`;
 }
 
 /** Prompt for Seedance's video edit. @Video1 is the clip, @Image1 the relit first frame. */
-export function seedancePrompt(look: Look): string {
-  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}. Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Photorealistic, stable architecture, no new objects, no added people.`;
+export function seedancePrompt(look: Look, scene?: Scene): string {
+  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Photorealistic, stable architecture, no new objects, no added people.`;
 }
 
 /** Short prompt for engines that take a relit first frame (ID-V2V). */
-export function relightPrompt(look: Look): string {
-  return `${look.video}. Photorealistic, the same lighting held steady throughout the clip, stable architecture, no flicker.`;
+export function relightPrompt(look: Look, scene?: Scene): string {
+  return `${look.video}.${sceneLine(scene)} Photorealistic, the same lighting held steady throughout the clip, stable architecture, no flicker.`;
 }
 
 /** Draw the lighting sphere MiniMax reads the light from. Browser only. */

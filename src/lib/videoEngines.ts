@@ -3,7 +3,7 @@
  * tick several and compare. Payload shapes were checked against each model's
  * fal schema.
  */
-import { Look, relightPrompt, seedancePrompt } from "./videoLooks";
+import { Look, Scene, relightPrompt, seedancePrompt } from "./videoLooks";
 
 export type EngineId = "klingpro" | "klingstd" | "seedance" | "idv2v" | "h3max" | "ltxnight";
 
@@ -127,20 +127,20 @@ export function estimateUsd(engine: Engine, secs: number, final: boolean): numbe
 
 export const FRAME_COST_USD = 0.15;
 
-export function buildPayload(engine: Engine, look: Look, input: EngineInput): Record<string, unknown> {
+export function buildPayload(engine: Engine, look: Look, input: EngineInput, scene?: Scene): Record<string, unknown> {
   const frames = Math.max(9, Math.round(input.secs * 24));
   switch (engine.id) {
     case "klingpro":
     case "klingstd":
       return {
-        prompt: seedancePrompt(look),
+        prompt: seedancePrompt(look, scene),
         video_url: input.videoUrl,
         image_urls: input.frameUrl ? [input.frameUrl] : [],
         keep_audio: false,
       };
     case "seedance":
       return {
-        prompt: seedancePrompt(look),
+        prompt: seedancePrompt(look, scene),
         video_urls: [input.videoUrl],
         image_urls: input.frameUrl ? [input.frameUrl] : [],
         resolution: input.final ? "1080p" : "720p",
@@ -151,7 +151,7 @@ export function buildPayload(engine: Engine, look: Look, input: EngineInput): Re
       };
     case "idv2v":
       return {
-        prompt: relightPrompt(look),
+        prompt: relightPrompt(look, scene),
         video_url: input.videoUrl,
         image_url: input.frameUrl,
         resolution: "720p",
