@@ -354,6 +354,13 @@ export default function VideoPage() {
         </Link>
       </header>
 
+      <nav className="mb-6 flex gap-2 border-b border-neutral-200 text-sm">
+        <span className="-mb-px border-b-2 border-neutral-900 px-3 py-2 font-medium">Relight</span>
+        <Link href="/video/create" className="-mb-px border-b-2 border-transparent px-3 py-2 font-medium text-neutral-500 hover:text-neutral-800">
+          Create
+        </Link>
+      </nav>
+
       {/* Clip */}
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
         {!clip ? (
