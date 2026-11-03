@@ -25,7 +25,7 @@
  */
 import { Redis } from "@upstash/redis";
 
-export type UsageTab = "declutter" | "enhance" | "restage" | "twilight" | "general" | "floorplan_scan";
+export type UsageTab = "declutter" | "enhance" | "restage" | "twilight" | "general" | "floorplan_scan" | "video";
 
 export interface UsageEntry {
   tab: UsageTab;
@@ -101,6 +101,16 @@ export function getWeeklyAllowances(): Record<string, number> {
     if (username && Number.isFinite(amount)) out[username] = amount;
   }
   return out;
+}
+
+/** Usernames locked to the video tool only (VIDEO_ONLY_USERS="1080XREMEL"). */
+export function isVideoOnly(username: string | null | undefined): boolean {
+  if (!username) return false;
+  return (process.env.VIDEO_ONLY_USERS ?? "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .includes(username);
 }
 
 export function getWeeklyAllowance(username: string): number | null {
