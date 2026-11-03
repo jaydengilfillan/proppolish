@@ -123,7 +123,7 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     if (!mime) throw new Error("This browser can't make MP4 clips. Use Chrome or Safari.");
     // Record a little over the chosen length: the recorder stops a few frames early, and engines reject clips even 0.02s under their 3s minimum.
     const dur = loops > 1 ? video.duration * loops : Math.min(video.duration, secs + 0.6, 15);
-    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 12_000_000 });
+    const recorder = new MediaRecorder(canvas.captureStream(48), { mimeType: mime, videoBitsPerSecond: 12_000_000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
       if (e.data.size) chunks.push(e.data);
@@ -142,8 +142,8 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     await new Promise<void>((resolve) => {
       let finished = false;
       let watchdog = 0;
-      // Repaint at a steady 30fps even if the source decodes slowly (big drone files), so the recording never falls under the engines' 23fps minimum.
-      const painter = window.setInterval(() => ctx.drawImage(video, 0, 0, w, h), 1000 / 30);
+      // Repaint at a steady 48fps target even if the source decodes slowly (big drone files), so the recording never falls under the engines' 23fps minimum.
+      const painter = window.setInterval(() => ctx.drawImage(video, 0, 0, w, h), 1000 / 48);
       const finish = () => {
         if (finished) return;
         finished = true;
