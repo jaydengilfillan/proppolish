@@ -170,7 +170,7 @@ export default function VideoPage() {
   const [clip, setClip] = useState<Clip | null>(null);
   const [secs, setSecs] = useState(5);
   const [looks, setLooks] = useState<string[]>(["sunny"]);
-  const [engines, setEngines] = useState<EngineId[]>(["seedance", "idv2v", "h3max"]);
+  const [engines, setEngines] = useState<EngineId[]>(["klingpro"]);
   const [final, setFinal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState("");
@@ -204,8 +204,8 @@ export default function VideoPage() {
   const selectedLooks = useMemo(() => LOOKS.filter((l) => looks.includes(l.id)), [looks]);
   const selectedEngines = useMemo(() => ENGINES.filter((e) => engines.includes(e.id)), [engines]);
   const pairs = useMemo(
-    () => selectedLooks.flatMap((l) => selectedEngines.filter((e) => engineApplies(e, l)).map((e) => ({ look: l, engine: e }))),
-    [selectedLooks, selectedEngines]
+    () => selectedLooks.flatMap((l) => selectedEngines.filter((e) => engineApplies(e, l) && secs >= (e.minSecs ?? 0)).map((e) => ({ look: l, engine: e }))),
+    [selectedLooks, selectedEngines, secs]
   );
   const cost = useMemo(() => {
     const frameLooks = new Set(pairs.filter((p) => p.engine.needsFrame).map((p) => p.look.id));
@@ -433,6 +433,9 @@ export default function VideoPage() {
                   {e.label} <span className="text-xs font-normal text-neutral-400">~{money(estimateUsd(e, Math.min(secs, e.maxSecs), final))} per clip</span>
                 </span>
                 <span className="block text-xs text-neutral-500">{e.blurb}</span>
+                {e.minSecs && secs < e.minSecs && engines.includes(e.id) && (
+                  <span className="block text-xs text-amber-600">Needs at least {e.minSecs}s, so it will be skipped until you raise the length.</span>
+                )}
               </span>
             </label>
           ))}
