@@ -112,7 +112,7 @@ export const LOOKS: Look[] = [
     night: false,
     blurb: "Low golden-pink sun, haze, rim light",
     video:
-      "a cinematic hero sunrise: the sun low on the horizon casting warm golden-pink light, long soft shadows, glowing atmospheric haze, warm rim light on edges and water, a sky that grades from soft peach at the horizon to clear blue above, rich but natural colour, premium luxury real-estate film look",
+      "a real golden sunrise as shot by a professional drone photographer: the sun low and warm on one side casting long soft directional shadows across every surface, a thin natural haze catching the light, a clean sky that grades gently from pale peach near the horizon to soft blue above with a few soft clouds lit warm underneath, gentle warm highlights and neutral cool shadows. Real photographic light only: believable exposure, natural colour, moderate saturation, no HDR look, no glow or bloom, no lens flare, no painted or neon colours.",
     sphere: { dir: [0.85, 0.2, 0.45], key: [255, 190, 120], ambient: [90, 110, 170], softness: 0.3 },
   },
   {
@@ -122,17 +122,17 @@ export const LOOKS: Look[] = [
     night: false,
     blurb: "Rich low sun, warm light, cool shadows",
     video:
-      "cinematic golden hour: low warm sun raking across every surface, rich golden highlights against cool soft shadows, glowing warm sky, strong depth and contrast, glittering reflections on water, premium luxury real-estate film look",
+      "real golden hour light: a low warm sun to one side giving a soft honey-gold key light and long natural shadows, a clean blue sky with soft clouds lit warm from below, gentle atmospheric haze in the distance, cool neutral shadows for natural contrast, water and glass catching believable reflections. Real photographic light only: believable exposure, natural colour, moderate saturation, no HDR look, no glow or bloom, no lens flare, no painted or neon colours.",
     sphere: { dir: [-0.8, 0.25, 0.5], key: [255, 175, 95], ambient: [85, 105, 165], softness: 0.25 },
   },
   {
     id: "blue_hour",
-    label: "Dramatic twilight",
+    label: "Hero twilight",
     group: "cinematic",
     night: false,
-    blurb: "Deep blue sky, fiery horizon, glowing windows",
+    blurb: "Real blue-hour sky, warm lit windows",
     video:
-      "dramatic cinematic blue hour: a deep saturated blue sky with a fiery orange glow on the horizon, strong contrast between cool ambient light and warm glowing windows and lights, glossy reflections on water and glass, premium luxury real-estate film look",
+      "a real twilight photograph shot about 15 minutes after sunset: a natural sky gradient from deep blue overhead to a soft pale peach glow at the horizon, a soft even blue ambient light on the building and ground, interior lights and windows glowing a believable warm tungsten colour that is not blown out, exterior and pool lights on at realistic brightness, subtle natural reflections, properly exposed so the architecture stays clearly visible. Real photographic light only: believable exposure, natural colour, moderate saturation, no HDR look, no glow or bloom, no lens flare, no painted or neon colours.",
     sphere: { dir: [0.0, 0.15, 1.0], key: [255, 160, 90], ambient: [30, 55, 140], softness: 0.45 },
   },
   {
@@ -142,7 +142,7 @@ export const LOOKS: Look[] = [
     night: true,
     blurb: "Moon-washed night, warm lit windows",
     video:
-      "a cinematic moonlit night: a deep blue-black sky with a bright moon, soft blue moonlight across the scene, warm glowing windows and lights, shimmering reflections on water, premium luxury real-estate film look",
+      "a real moonlit night photograph: a dark navy sky with a soft moon and faint stars, gentle cool blue ambient light on the scene, warm windows and lights glowing at realistic brightness, natural reflections on water, exposed like a professional night real-estate photograph. Real photographic light only: believable exposure, natural colour, moderate saturation, no HDR look, no glow or bloom, no lens flare, no painted or neon colours.",
     sphere: { dir: [-0.4, 0.8, 0.45], key: [170, 195, 255], ambient: [18, 28, 70], softness: 0.4 },
   },
 ];
@@ -155,7 +155,7 @@ export function getLook(id: string): Look | undefined {
 export function framePrompt(look: Look, scene?: Scene): string {
   const strength =
     look.group === "cinematic"
-      ? "Push the lighting to a dramatic, high-end, cinematic standard."
+      ? "Make the light beautiful and high-end, but strictly photographic and believable, as a skilled real-estate and drone photographer would capture it. Never stylised, never over-saturated, never fake or painted."
       : "Keep the result natural, clean and believable, the way a skilled photographer would shoot it in this light.";
   return `Use the supplied video frame as the exact base image. Keep the architecture, every object, the camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign anything. This is a lighting and sky change only.
 
@@ -164,7 +164,7 @@ Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)} Make th
 
 /** Prompt for Seedance's video edit. @Video1 is the clip, @Image1 the relit first frame. */
 export function seedancePrompt(look: Look, scene?: Scene): string {
-  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Photorealistic, stable architecture, no new objects, no added people.`;
+  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people.`;
 }
 
 /** Short prompt for engines that take a relit first frame (ID-V2V). */
