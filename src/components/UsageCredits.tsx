@@ -16,21 +16,25 @@ interface UsageResponse {
  * only — going over the allowance is just a colour change, never blocked.
  * Renders nothing if the user has no allowance configured (e.g. admins).
  */
-export default function UsageCredits() {
+export default function UsageCredits({ always = false }: { always?: boolean }) {
   const [data, setData] = useState<UsageResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/usage")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: UsageResponse | null) => {
-        if (!cancelled) setData(d);
-      })
-      .catch(() => {
-        if (!cancelled) setData(null);
-      });
+    const load = () =>
+      fetch("/api/usage")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: UsageResponse | null) => {
+          if (!cancelled) setData(d);
+        })
+        .catch(() => {
+          if (!cancelled && !always) setData(null);
+        });
+    void load();
+    const t = always ? window.setInterval(load, 15000) : 0;
     return () => {
       cancelled = true;
+      if (t) window.clearInterval(t);
     };
   }, []);
 
@@ -54,7 +58,7 @@ export default function UsageCredits() {
   const textColour = `hsl(${hue}, 70%, 38%)`;
 
   return (
-    <div className="hidden flex-col items-end gap-0.5 sm:flex" title="Your credits reset weekly">
+    <div className={always ? "flex flex-col items-end gap-0.5" : "hidden flex-col items-end gap-0.5 sm:flex"} title="Your credits reset weekly">
       <span className="text-xs font-medium" style={{ color: textColour }}>
         ${remaining.toFixed(2)} credits left this week
       </span>
