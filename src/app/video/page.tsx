@@ -220,7 +220,8 @@ export default function VideoPage() {
   const jobs = useMemo(() => allJobs.filter((j) => j.kind === "relight"), [allJobs]);
   const [frames, setFrames] = useState<Record<string, FrameState>>({});
   const fileInput = useRef<HTMLInputElement>(null);
-  const preparedRef = useRef<{ key: string; url: string } | null>(null);
+  // Prepared + uploaded clip, reused when you generate another look from the same clip without reloading it.
+  const preparedRef = useRef<{ key: string; promise: Promise<[string, string]> } | null>(null);
 
   useEffect(() => () => { if (clip) URL.revokeObjectURL(clip.url); }, [clip]);
 
@@ -280,8 +281,7 @@ export default function VideoPage() {
       }))
     );
     addJobs(newJobs);
-    setClip(null);
-    preparedRef.current = null;
+    // Keep the clip loaded so another look can be generated from it straight away.
     void runBatch(batchId, snap, newJobs);
   }
 
@@ -294,13 +294,25 @@ export default function VideoPage() {
     const noteAll = (note: string) => newJobs.forEach((j) => patchJob(j.id, { note }));
     try {
       // 1) prepare + upload the clip
-      noteAll("Preparing the clip… 0% (keep this tab open)");
-      const blob = await prepareClip(c.file, sSecs, (p) => noteAll(`Preparing the clip… ${Math.round(p * 100)}% (keep this tab open)`), sLoops);
-      noteAll("Uploading the clip…");
-      const [videoUrl, srcUrl] = await Promise.all([
-        uploadToFal(blob, `clip-${Date.now()}.mp4`),
-        dataUriToBlob(c.firstFrame).then((b) => uploadToFal(b, `frame-${Date.now()}.jpg`)),
-      ]);
+      const key = `${c.file.name}|${c.file.size}|${c.file.lastModified}|${sSecs}|${sLoops}`;
+      let prep = preparedRef.current;
+      if (!prep || prep.key !== key) {
+        noteAll("Preparing the clip… 0% (keep this tab open)");
+        const promise = (async (): Promise<[string, string]> => {
+          const blob = await prepareClip(c.file, sSecs, (p) => noteAll(`Preparing the clip… ${Math.round(p * 100)}% (keep this tab open)`), sLoops);
+          noteAll("Uploading the clip…");
+          return Promise.all([
+            uploadToFal(blob, `clip-${Date.now()}.mp4`),
+            dataUriToBlob(c.firstFrame).then((b) => uploadToFal(b, `frame-${Date.now()}.jpg`)),
+          ]);
+        })();
+        prep = { key, promise };
+        preparedRef.current = prep;
+        promise.catch(() => { if (preparedRef.current === prep) preparedRef.current = null; });
+      } else {
+        noteAll("Using the clip already prepared…");
+      }
+      const [videoUrl, srcUrl] = await prep.promise;
 
       // 2) relit first frames (one per look, shared by the engines that use them)
       const frameLooks = Array.from(new Set(sPairs.filter((p) => p.engine.needsFrame).map((p) => p.look)));
