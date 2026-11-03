@@ -116,6 +116,16 @@ export const LOOKS: Look[] = [
     sphere: { dir: [0.85, 0.2, 0.45], key: [255, 190, 120], ambient: [90, 110, 170], softness: 0.3 },
   },
   {
+    id: "orange_sunrise",
+    label: "Hero orange sunrise",
+    group: "cinematic",
+    night: false,
+    blurb: "Rich orange sky, low sun, glowing sun path",
+    video:
+      "a real rich orange sunrise as shot by a professional photographer: the sun a small bright disc just above a flat horizon with a soft glow around it, a sky graded from warm amber-tan at the top to deep saturated orange near the horizon with almost no clouds, strong warm orange light falling on every surface from the low sun, long soft shadows, darker deeper-toned water or ground with a glittering orange-red sun path running toward the camera, an overall warm orange colour cast that is natural and believable, strong warm-to-dark contrast, lit surfaces catching a warm orange glow while shadows stay deep and neutral. Real photographic light only: believable exposure, no HDR look, no bloom, no lens flare, no painted or neon colours.",
+    sphere: { dir: [0.0, 0.18, 0.95], key: [255, 140, 55], ambient: [95, 65, 70], softness: 0.35 },
+  },
+  {
     id: "golden",
     label: "Golden hour",
     group: "cinematic",
