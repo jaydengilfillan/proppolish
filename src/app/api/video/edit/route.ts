@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { chargeCredits, checkCredits } from "@/lib/videoBilling";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,9 @@ export async function POST(req: NextRequest) {
   const prefs = typeof body.prefs === "string" ? body.prefs.slice(0, 1500) : "";
 
   const prompt = `Edit @Video1 with this change: ${change.replace(/[.\s]+$/g, "")}. Keep everything else exactly the same: the architecture, every other object, the camera movement, framing, timing and all motion. Photorealistic, stable, no flicker, no new objects unless asked.${prefs ? " " + prefs : ""}`;
+  const cost = body.engine === "klingpro" ? 0.85 : 0.65; // ~5s clip
+  const blocked = await checkCredits(req, cost);
+  if (blocked) return blocked;
   const resp = await fetch(`https://queue.fal.run/${model}`, {
     method: "POST",
     headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
@@ -34,5 +38,6 @@ export async function POST(req: NextRequest) {
   if (!resp.ok) return NextResponse.json({ error: `Edit refused (${resp.status}): ${text.slice(0, 300)}` }, { status: 502 });
   const json = JSON.parse(text) as { status_url?: string; response_url?: string };
   if (!json.status_url || !json.response_url) return NextResponse.json({ error: "fal returned no job URLs." }, { status: 502 });
+  await chargeCredits(req, cost, `edit · ${String(body.engine)}`);
   return NextResponse.json({ statusUrl: json.status_url, responseUrl: json.response_url });
 }

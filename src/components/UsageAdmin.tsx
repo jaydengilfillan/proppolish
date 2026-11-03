@@ -32,6 +32,7 @@ const TAB_DISPLAY: Record<string, string> = {
   twilight: "Twilight",
   general: "Prompt",
   floorplan_scan: "Floor Plan scan",
+  video: "Video",
 };
 
 /**

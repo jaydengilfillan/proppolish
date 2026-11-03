@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildPayload, engineApplies, getEngine } from "@/lib/videoEngines";
+import { buildPayload, engineApplies, estimateUsd, getEngine } from "@/lib/videoEngines";
+import { chargeCredits, checkCredits } from "@/lib/videoBilling";
 import { extraFor, getLook, getScene } from "@/lib/videoLooks";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,10 @@ export async function POST(req: NextRequest) {
     final: body.final === true,
   }, getScene(typeof body.scene === "string" ? body.scene : undefined), extraFor(typeof body.variant === "number" ? body.variant : 0, typeof body.tweak === "string" ? body.tweak.slice(0, 400) : ""));
 
+  const cost = estimateUsd(engine, secs, body.final === true);
+  const blocked = await checkCredits(req, cost);
+  if (blocked) return blocked;
+
   const resp = await fetch(`https://queue.fal.run/${engine.model}`, {
     method: "POST",
     headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
@@ -61,5 +66,6 @@ export async function POST(req: NextRequest) {
   }
   const json = JSON.parse(text) as { status_url?: string; response_url?: string };
   if (!json.status_url || !json.response_url) return NextResponse.json({ error: "fal returned no job URLs." }, { status: 502 });
+  await chargeCredits(req, cost, `${look.id} · ${engine.id}`);
   return NextResponse.json({ statusUrl: json.status_url, responseUrl: json.response_url });
 }
