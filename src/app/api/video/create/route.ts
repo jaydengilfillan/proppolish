@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MAX_REFS, buildCreatePayload, getCreateEngine, Aspect } from "@/lib/videoCreate";
+import { chargeCredits, checkCredits } from "@/lib/videoBilling";
+import { MAX_REFS, buildCreatePayload, estimateCreateUsd, getCreateEngine, Aspect } from "@/lib/videoCreate";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Bad request." }, { status: 400 });
   }
 
+  const cost = estimateCreateUsd(engine, secs, body.final === true, body.audio === true);
+  const blocked = await checkCredits(req, cost);
+  if (blocked) return blocked;
+
   const resp = await fetch(`https://queue.fal.run/${engine.model}`, {
     method: "POST",
     headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
@@ -52,5 +57,6 @@ export async function POST(req: NextRequest) {
   if (!resp.ok) return NextResponse.json({ error: `${engine.label} refused the job (${resp.status}): ${text.slice(0, 300)}` }, { status: 502 });
   const json = JSON.parse(text) as { status_url?: string; response_url?: string };
   if (!json.status_url || !json.response_url) return NextResponse.json({ error: "fal returned no job URLs." }, { status: 502 });
+  await chargeCredits(req, cost, `create · ${engine.id}`);
   return NextResponse.json({ statusUrl: json.status_url, responseUrl: json.response_url });
 }
