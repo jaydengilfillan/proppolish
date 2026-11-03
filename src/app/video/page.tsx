@@ -116,7 +116,8 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
       typeof MediaRecorder !== "undefined" ? MediaRecorder.isTypeSupported(m) : false
     );
     if (!mime) throw new Error("This browser can't make MP4 clips. Use Chrome or Safari.");
-    const dur = Math.min(video.duration, secs);
+    // Record a little over the chosen length: the recorder stops a few frames early, and engines reject clips even 0.02s under their 3s minimum.
+    const dur = Math.min(video.duration, secs + 0.6, 15);
     const recorder = new MediaRecorder(canvas.captureStream(24), { mimeType: mime, videoBitsPerSecond: 12_000_000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
