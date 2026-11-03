@@ -6,17 +6,9 @@ import { APP_NAME } from "@/lib/config";
 import { LOOKS, Look, SCENES, renderSphere } from "@/lib/videoLooks";
 import { ENGINES, Engine, EngineId, FRAME_COST_USD, engineApplies, estimateUsd } from "@/lib/videoEngines";
 import { triggerDownload, urlToBlob } from "@/lib/image";
+import { Job, useVideoStore } from "@/lib/videoStore";
+import VideoNav from "./VideoNav";
 
-type JobStatus = "waiting" | "queued" | "running" | "done" | "failed";
-interface Job {
-  id: string;
-  engine: EngineId;
-  look: string;
-  status: JobStatus;
-  note?: string;
-  videoUrl?: string;
-  error?: string;
-}
 interface FrameState {
   status: "loading" | "done" | "failed";
   url?: string;
@@ -176,7 +168,8 @@ export default function VideoPage() {
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const { jobs: allJobs, addJobs, patchJob, removeJob, clearFinished, track } = useVideoStore();
+  const jobs = useMemo(() => allJobs.filter((j) => j.kind === "relight"), [allJobs]);
   const [frames, setFrames] = useState<Record<string, FrameState>>({});
   const fileInput = useRef<HTMLInputElement>(null);
   const preparedRef = useRef<{ key: string; url: string } | null>(null);
@@ -194,7 +187,6 @@ export default function VideoPage() {
       const c = await readClip(file);
       setClip(c);
       setSecs(Math.max(2, Math.min(5, Math.floor(c.duration))));
-      setJobs([]);
       setFrames({});
       preparedRef.current = null;
     } catch (e) {
@@ -215,30 +207,6 @@ export default function VideoPage() {
     return total;
   }, [pairs, secs, final]);
 
-  const patchJob = (id: string, patch: Partial<Job>) => setJobs((js) => js.map((j) => (j.id === id ? { ...j, ...patch } : j)));
-
-  async function pollJob(jobId: string, statusUrl: string, responseUrl: string) {
-    const started = Date.now();
-    while (Date.now() - started < 25 * 60 * 1000) {
-      await sleep(5000);
-      try {
-        const r = await api<{ status: string; videoUrl?: string; error?: string; position?: number }>(
-          `/api/video/status?statusUrl=${encodeURIComponent(statusUrl)}&responseUrl=${encodeURIComponent(responseUrl)}`
-        );
-        if (r.status === "DONE") return patchJob(jobId, { status: "done", videoUrl: r.videoUrl, note: undefined });
-        if (r.status === "FAILED") return patchJob(jobId, { status: "failed", error: r.error });
-        patchJob(jobId, {
-          status: r.status === "IN_QUEUE" ? "queued" : "running",
-          note: r.status === "IN_QUEUE" && typeof r.position === "number" ? `Waiting in line (${r.position + 1})` : undefined,
-        });
-      } catch (e) {
-        // transient network blip: keep polling
-        patchJob(jobId, { note: e instanceof Error ? e.message : "Retrying…" });
-      }
-    }
-    patchJob(jobId, { status: "failed", error: "Took too long. Check fal.ai and try again." });
-  }
-
   async function generate() {
     if (!clip || pairs.length === 0) return;
     setBusy(true);
@@ -257,13 +225,15 @@ export default function VideoPage() {
 
       // 2) create the job cards
       const newJobs: Job[] = pairs.map((p) => ({
+        kind: "relight" as const,
+        createdAt: Date.now(),
         id: `${Date.now()}-${p.engine.id}-${p.look.id}-${Math.random().toString(36).slice(2, 6)}`,
         engine: p.engine.id,
         look: p.look.id,
-        status: "waiting",
+        status: "waiting" as const,
         note: p.engine.needsFrame ? "Waiting for the relit first frame" : "Starting",
       }));
-      setJobs(newJobs);
+      addJobs(newJobs);
       setStage("");
 
       // 3) relit first frames (one per look, shared by the engines that use them)
@@ -312,8 +282,7 @@ export default function VideoPage() {
               height: clip.height,
               final,
             });
-            patchJob(job.id, { status: "queued", note: undefined });
-            await pollJob(job.id, r.statusUrl, r.responseUrl);
+            track(job.id, r.statusUrl, r.responseUrl);
           } catch (e) {
             patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
           }
@@ -354,12 +323,7 @@ export default function VideoPage() {
         </Link>
       </header>
 
-      <nav className="mb-6 flex gap-2 border-b border-neutral-200 text-sm">
-        <span className="-mb-px border-b-2 border-neutral-900 px-3 py-2 font-medium">Relight</span>
-        <Link href="/video/create" className="-mb-px border-b-2 border-transparent px-3 py-2 font-medium text-neutral-500 hover:text-neutral-800">
-          Create
-        </Link>
-      </nav>
+      <VideoNav active="relight" />
 
       {/* Clip */}
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
@@ -399,7 +363,7 @@ export default function VideoPage() {
                 />
                 <span className="text-neutral-600">seconds (max {MAX_SECS}; cost scales with length)</span>
               </label>
-              <button onClick={() => { setClip(null); setJobs([]); setFrames({}); }} className="w-fit text-xs text-neutral-500 underline">
+              <button onClick={() => { setClip(null); setFrames({}); }} className="w-fit text-xs text-neutral-500 underline">
                 Use a different clip
               </button>
             </div>
@@ -512,16 +476,26 @@ export default function VideoPage() {
       {/* Results */}
       {jobs.length > 0 && (
         <section>
-          <h2 className="mb-2 text-sm font-semibold">Results</h2>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Results</h2>
+            <button onClick={clearFinished} className="text-xs text-neutral-500 underline">
+              Clear finished
+            </button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {jobs.map((j) => {
               const engine = ENGINES.find((e) => e.id === j.engine);
               const look = LOOKS.find((l) => l.id === j.look);
               return (
                 <div key={j.id} className="rounded-xl border border-neutral-200 bg-white p-3">
-                  <p className="mb-2 text-sm font-medium">
-                    {look?.label} <span className="text-neutral-400">·</span> {engine?.label}
-                  </p>
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium">
+                      {look?.label} <span className="text-neutral-400">·</span> {engine?.label}
+                    </p>
+                    <button onClick={() => removeJob(j.id)} title="Remove" className="text-neutral-400 hover:text-red-600">
+                      ✕
+                    </button>
+                  </div>
                   {j.status === "done" && j.videoUrl ? (
                     <>
                       <video src={j.videoUrl} controls loop muted className="w-full rounded-lg bg-black" />
