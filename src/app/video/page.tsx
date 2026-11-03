@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { APP_NAME } from "@/lib/config";
-import { LOOKS, Look, renderSphere } from "@/lib/videoLooks";
+import { LOOKS, Look, SCENES, renderSphere } from "@/lib/videoLooks";
 import { ENGINES, Engine, EngineId, FRAME_COST_USD, engineApplies, estimateUsd } from "@/lib/videoEngines";
 import { triggerDownload, urlToBlob } from "@/lib/image";
 
@@ -169,6 +169,7 @@ function money(n: number): string {
 export default function VideoPage() {
   const [clip, setClip] = useState<Clip | null>(null);
   const [secs, setSecs] = useState(5);
+  const [scene, setScene] = useState("auto");
   const [looks, setLooks] = useState<string[]>(["sunny"]);
   const [engines, setEngines] = useState<EngineId[]>(["klingpro"]);
   const [final, setFinal] = useState(false);
@@ -275,6 +276,7 @@ export default function VideoPage() {
             const r = await api<{ url: string }>("/api/video/frame", {
               image: clip.firstFrame,
               look: look.id,
+              scene,
               width: clip.width,
               height: clip.height,
             });
@@ -301,6 +303,7 @@ export default function VideoPage() {
             const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", {
               engine: engine.id,
               look: look.id,
+              scene,
               videoUrl,
               frameUrl: frameUrls[look.id] ?? undefined,
               sphereUrl,
@@ -395,6 +398,25 @@ export default function VideoPage() {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Scene */}
+      <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <h2 className="mb-3 text-sm font-semibold">Scene</h2>
+        <div className="flex flex-wrap gap-2">
+          {SCENES.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setScene(s.id)}
+              className={`rounded-lg border px-3 py-2 text-left text-sm transition ${
+                scene === s.id ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 hover:border-neutral-500"
+              }`}
+            >
+              <span className="block font-medium">{s.label}</span>
+              <span className={`block text-xs ${scene === s.id ? "text-neutral-300" : "text-neutral-500"}`}>{s.blurb}</span>
+            </button>
+          ))}
+        </div>
       </section>
 
       {/* Looks */}
