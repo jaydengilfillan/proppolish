@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth";
 
+// Video-only users (env VIDEO_ONLY_USERS) can reach only these.
+const VIDEO_ONLY_ALLOWED = ["/video", "/api/video", "/api/usage", "/api/me", "/api/logout", "/api/auth-status"];
+function videoOnlyAllows(pathname: string): boolean {
+  return VIDEO_ONLY_ALLOWED.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 // Paths that must stay reachable without a session:
 // - /login and /api/login: you can't log in if the login page itself is gated.
 // - /api/logout: needs to be callable to clear a stale/invalid cookie.
@@ -24,6 +30,11 @@ export async function middleware(req: NextRequest) {
   const username = secret ? await verifySession(token, secret) : null;
 
   if (username) {
+    const videoOnly = (process.env.VIDEO_ONLY_USERS ?? "").split(",").map((x) => x.trim()).filter(Boolean).includes(username);
+    if (videoOnly && !videoOnlyAllows(pathname)) {
+      if (pathname.startsWith("/api")) return NextResponse.json({ error: "Not available for this account." }, { status: 403 });
+      return NextResponse.redirect(new URL("/video", req.url));
+    }
     // Forward the verified username to route handlers as a request header
     // (x-pp-user) so they know who's calling without re-verifying the
     // cookie themselves — used by usage tracking (see src/lib/usage.ts) to
