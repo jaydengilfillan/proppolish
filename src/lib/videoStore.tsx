@@ -38,6 +38,8 @@ export interface Job {
   createdAt: number;
   /** Original inputs of a Create job, so it can be re-run with a change. */
   params?: CreateParams;
+  take?: number;
+  tweak?: string;
   /** How to resubmit this job if fal fails it (endpoint + body). */
   request?: { path: string; body: unknown };
   /** Automatic resubmits still available. */
