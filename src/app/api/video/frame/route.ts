@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { falEdit, FalError, nearestFalAspectRatio } from "@/lib/fal";
+import { FRAME_COST_USD } from "@/lib/videoEngines";
+import { chargeCredits, checkCredits } from "@/lib/videoBilling";
 import { extraFor, framePrompt, getLook, getScene } from "@/lib/videoLooks";
 
 export const maxDuration = 120;
@@ -20,6 +22,8 @@ export async function POST(req: NextRequest) {
   }
   const width = typeof body.width === "number" ? body.width : undefined;
   const height = typeof body.height === "number" ? body.height : undefined;
+  const blocked = await checkCredits(req, FRAME_COST_USD);
+  if (blocked) return blocked;
   try {
     const url = await falEdit({
       prompt: framePrompt(look, getScene(typeof body.scene === "string" ? body.scene : undefined), extraFor(typeof body.variant === "number" ? body.variant : 0, typeof body.tweak === "string" ? body.tweak.slice(0, 400) : "")),
@@ -27,6 +31,7 @@ export async function POST(req: NextRequest) {
       resolution: "2K",
       aspectRatio: nearestFalAspectRatio(width, height),
     });
+    await chargeCredits(req, FRAME_COST_USD, `${look.id} · first frame`);
     return NextResponse.json({ url });
   } catch (err) {
     const status = err instanceof FalError ? err.status : 500;
