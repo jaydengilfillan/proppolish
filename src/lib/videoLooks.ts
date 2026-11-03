@@ -72,6 +72,23 @@ export function getScene(id?: string): Scene {
   return SCENES.find((s) => s.id === id) ?? SCENES[0];
 }
 
+/**
+ * Extra direction appended to the prompts: a built-in variation per take (so takes differ)
+ * plus anything the user typed to adjust the result.
+ */
+export const VARIANTS: string[] = [
+  "",
+  "Variation: place the main light source a little higher in the frame and make the colour lighter and brighter, with softer shadows.",
+  "Variation: softer, hazier, more diffused light with a slightly more golden tone and gentle contrast.",
+  "Variation: punchier, richer colour and stronger contrast, with the light source lower and more dramatic.",
+];
+
+export function extraFor(variant?: number, tweak?: string): string {
+  const v = typeof variant === "number" && variant > 0 ? VARIANTS[variant % VARIANTS.length] : "";
+  const t = tweak && tweak.trim() ? `Adjustment requested, apply it clearly: ${tweak.trim().replace(/[.\s]+$/g, "")}.` : "";
+  return [v, t].filter(Boolean).join(" ");
+}
+
 const sceneLine = (scene?: Scene) => (scene && scene.note ? ` ${scene.note}` : "");
 
 export const LOOKS: Look[] = [
@@ -122,7 +139,7 @@ export const LOOKS: Look[] = [
     night: false,
     blurb: "Rich orange sky, glowing sun, warm haze (sea or city)",
     video:
-      "a real rich orange sunrise or sunset as shot by a professional photographer: the sun glowing as a bright disc with a soft warm halo, low in the sky, flooding the whole scene with deep saturated orange and amber light, a sky graded from soft amber-tan at the top to rich orange near the horizon with a few thin warm-lit clouds, a believable warm-orange colour cast over everything, layered atmospheric haze in the distance so far hills and buildings fade into glowing orange, strong warm-to-dark contrast. Adapt to the scene: over open water or flat horizons keep the sun low just above the horizon with a long glittering orange-red sun path on darker water; over a city or buildings let the low sun sit higher in the sky, back-light the buildings so they read as deep rich dark tones with warm orange rim light on their edges and glass catching the glow, and let haze separate each distant layer. Real photographic light only: believable exposure, no HDR look, no heavy bloom, no painted or neon colours. Do not add any text, logos or watermarks.",
+      "a real rich orange sunrise or sunset as shot by a professional photographer: the sun glowing with a soft warm halo, a sky graded from soft amber to warm orange with a few thin warm-lit clouds, a believable warm orange glow and colour cast over the scene, soft atmospheric haze in the distance, warm light and gentle contrast. Use the references only as inspiration, not a template: vary the sun height, how light or deep the orange is, and the haze from shot to shot. Keep the scene's own detail visible: buildings and surfaces should show their form with warm orange light on their sunlit faces and soft shadows, not crushed into dark silhouettes. Over open water or flat horizons the sun can sit low with a glittering orange sun path; over a city or buildings the sun can sit higher, with warm rim light on edges and glass catching the glow. Real photographic light only: believable exposure, no HDR look, no heavy bloom, no painted or neon colours. Do not add any text, logos or watermarks.",
     sphere: { dir: [0.0, 0.18, 0.95], key: [255, 140, 55], ambient: [95, 65, 70], softness: 0.35 },
   },
   {
@@ -162,24 +179,24 @@ export function getLook(id: string): Look | undefined {
 }
 
 /** Prompt for the Nano Banana relight of the clip's first frame. */
-export function framePrompt(look: Look, scene?: Scene): string {
+export function framePrompt(look: Look, scene?: Scene, extra?: string): string {
   const strength =
     look.group === "cinematic"
       ? "Make the light beautiful and high-end, but strictly photographic and believable, as a skilled real-estate and drone photographer would capture it. Never stylised, never over-saturated, never fake or painted."
       : "Keep the result natural, clean and believable, the way a skilled photographer would shoot it in this light.";
   return `Use the supplied video frame as the exact base image. Keep the architecture, every object, the camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. Do not add, remove, move, recolour or redesign anything. This is a lighting and sky change only.
 
-Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)} Make the sky, the direction and colour of the light, the shadows, the reflections and the glow of lights all agree with this lighting, on every surface. Keep fine detail, text and textures sharp. No people or objects that are not already in the frame. Photorealistic.`;
+Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)}${extra ? " " + extra : ""} Make the sky, the direction and colour of the light, the shadows, the reflections and the glow of lights all agree with this lighting, on every surface. Keep fine detail, text and textures sharp. No people or objects that are not already in the frame. Photorealistic.`;
 }
 
 /** Prompt for Seedance's video edit. @Video1 is the clip, @Image1 the relit first frame. */
-export function seedancePrompt(look: Look, scene?: Scene): string {
-  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people.`;
+export function seedancePrompt(look: Look, scene?: Scene, extra?: string): string {
+  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people.`;
 }
 
 /** Short prompt for engines that take a relit first frame (ID-V2V). */
-export function relightPrompt(look: Look, scene?: Scene): string {
-  return `${look.video}.${sceneLine(scene)} Photorealistic, the same lighting held steady throughout the clip, stable architecture, no flicker.`;
+export function relightPrompt(look: Look, scene?: Scene, extra?: string): string {
+  return `${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Photorealistic, the same lighting held steady throughout the clip, stable architecture, no flicker.`;
 }
 
 /** Draw the lighting sphere MiniMax reads the light from. Browser only. */

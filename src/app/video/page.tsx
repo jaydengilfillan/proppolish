@@ -209,6 +209,8 @@ export default function VideoPage() {
   const [engines, setEngines] = useState<EngineId[]>(["klingpro"]);
   const [final, setFinal] = useState(false);
   const [takes, setTakes] = useState(2);
+  const [redoOpen, setRedoOpen] = useState<string | null>(null);
+  const [redoText, setRedoText] = useState("");
   const [retries, setRetries] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const { jobs: allJobs, addJobs, patchJob, removeJob, clearFinished, track } = useVideoStore();
@@ -244,7 +246,7 @@ export default function VideoPage() {
   );
   const cost = useMemo(() => {
     const frameLooks = new Set(pairs.filter((p) => p.engine.needsFrame).map((p) => p.look.id));
-    let total = frameLooks.size * FRAME_COST_USD;
+    let total = frameLooks.size * takes * FRAME_COST_USD;
     for (const p of pairs) total += estimateUsd(p.engine, Math.min(secs, p.engine.maxSecs), final) * takes;
     return total;
   }, [pairs, secs, final, takes]);
@@ -260,7 +262,8 @@ export default function VideoPage() {
     const snap = { clip, secs, loops, scene, final, takes, retries, pairs };
     const batchId = `${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
     const newJobs: Job[] = snap.pairs.flatMap((p) =>
-      Array.from({ length: snap.takes }, () => ({
+      Array.from({ length: snap.takes }, (_, t) => ({
+        take: t,
         kind: "relight" as const,
         createdAt: Date.now(),
         id: `${Date.now()}-${p.engine.id}-${p.look.id}-${Math.random().toString(36).slice(2, 6)}`,
@@ -291,28 +294,35 @@ export default function VideoPage() {
       noteAll("Preparing the clip… 0% (keep this tab open)");
       const blob = await prepareClip(c.file, sSecs, (p) => noteAll(`Preparing the clip… ${Math.round(p * 100)}% (keep this tab open)`), sLoops);
       noteAll("Uploading the clip…");
-      const videoUrl = await uploadToFal(blob, `clip-${Date.now()}.mp4`);
+      const [videoUrl, srcUrl] = await Promise.all([
+        uploadToFal(blob, `clip-${Date.now()}.mp4`),
+        dataUriToBlob(c.firstFrame).then((b) => uploadToFal(b, `frame-${Date.now()}.jpg`)),
+      ]);
 
       // 2) relit first frames (one per look, shared by the engines that use them)
       const frameLooks = Array.from(new Set(sPairs.filter((p) => p.engine.needsFrame).map((p) => p.look)));
       const frameUrls: Record<string, string | null> = {};
       noteAll(frameLooks.length ? "Making the relit first frame…" : "Starting…");
+      const takeCount = Math.max(...newJobs.map((j) => (j.take ?? 0) + 1), 1);
+      const frameTasks = frameLooks.flatMap((look) => Array.from({ length: takeCount }, (_, t) => ({ look, t })));
       await Promise.all(
-        frameLooks.map(async (look) => {
-          const fk = `${batchId}|${look.id}`;
+        frameTasks.map(async ({ look, t }) => {
+          const fk = `${batchId}|${look.id}|${t}`;
+          const fid = `${look.id}|${t}`;
           setFrames((f) => ({ ...f, [fk]: { status: "loading", name: c.file.name } }));
           try {
             const r = await api<{ url: string }>("/api/video/frame", {
-              image: c.firstFrame,
+              image: srcUrl,
               look: look.id,
               scene: sScene,
+              variant: t,
               width: c.width,
               height: c.height,
             });
-            frameUrls[look.id] = r.url;
+            frameUrls[fid] = r.url;
             setFrames((f) => ({ ...f, [fk]: { status: "done", url: r.url, name: c.file.name } }));
           } catch (e) {
-            frameUrls[look.id] = null;
+            frameUrls[fid] = null;
             setFrames((f) => ({ ...f, [fk]: { status: "failed", error: e instanceof Error ? e.message : "Failed", name: c.file.name } }));
           }
         })
@@ -328,14 +338,17 @@ export default function VideoPage() {
             if (engine.needsSphere) {
               sphereUrl = await uploadToFal(await dataUriToBlob(renderSphere(look)), `sphere-${look.id}.png`);
             }
-            if (engine.needsFrame && !frameUrls[look.id]) throw new Error("The relit first frame failed, so this one couldn't start.");
+            const fid = `${look.id}|${job.take ?? 0}`;
+            if (engine.needsFrame && !frameUrls[fid]) throw new Error("The relit first frame failed, so this one couldn't start.");
             const body = {
               engine: engine.id,
               look: look.id,
               scene: sScene,
               videoUrl,
-              frameUrl: frameUrls[look.id] ?? undefined,
+              frameUrl: frameUrls[fid] ?? undefined,
               sphereUrl,
+              variant: job.take ?? 0,
+              srcUrl,
               secs: sSecs,
               width: c.width,
               height: c.height,
@@ -353,6 +366,63 @@ export default function VideoPage() {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       newJobs.forEach((j) => patchJob(j.id, { status: "failed", error: msg, note: undefined }));
     }
+  }
+
+  /** Redo one result with a typed change: new relit first frame from the original frame, then the video again. */
+  function redo(job: Job, text: string) {
+    const t = text.trim();
+    if (!t) return;
+    const body0 = (job.request?.body ?? null) as Record<string, unknown> | null;
+    setRedoOpen(null);
+    setRedoText("");
+    if (!body0) {
+      setError("This result is too old to redo (it was made before this feature). Run the clip again.");
+      return;
+    }
+    const engine = ENGINES.find((e) => e.id === job.engine) as Engine;
+    const tweak = [job.tweak, t].filter(Boolean).join(". ");
+    const id = `${Date.now()}-redo-${Math.random().toString(36).slice(2, 6)}`;
+    addJobs([
+      {
+        id,
+        kind: "relight",
+        engine: job.engine,
+        look: job.look,
+        title: job.title,
+        take: job.take,
+        tweak,
+        status: "waiting",
+        note: engine.needsFrame ? "Making a new relit first frame…" : "Submitting…",
+        retriesLeft: 2,
+        attempts: 1,
+        createdAt: Date.now(),
+      },
+    ]);
+    void (async () => {
+      try {
+        let frameUrl = body0.frameUrl as string | undefined;
+        if (engine.needsFrame) {
+          if (!body0.srcUrl) throw new Error("The original frame wasn't saved for this result, so it can't be redone. Run the clip again.");
+          const r = await api<{ url: string }>("/api/video/frame", {
+            image: body0.srcUrl,
+            look: job.look,
+            scene: body0.scene,
+            variant: job.take ?? 0,
+            tweak,
+            width: body0.width,
+            height: body0.height,
+          });
+          frameUrl = r.url;
+          setFrames((f) => ({ ...f, [`${id}|${job.look}|${job.take ?? 0}`]: { status: "done", url: r.url, name: `${job.title ?? "clip"} (changed: ${t.slice(0, 30)})` } }));
+        }
+        const body = { ...body0, frameUrl, tweak };
+        patchJob(id, { request: { path: "/api/video/start", body }, note: "Submitting…" });
+        const r2 = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", body);
+        track(id, r2.statusUrl, r2.responseUrl);
+      } catch (e) {
+        patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
+      }
+    })();
   }
 
   async function download(url: string, name: string) {
@@ -552,7 +622,7 @@ export default function VideoPage() {
           <div className="flex flex-wrap gap-3">
             {Object.entries(frames).map(([id, f]) => (
               <div key={id} className="w-56 rounded-lg border border-neutral-200 bg-white p-2">
-                <p className="mb-1 text-xs font-medium">{LOOKS.find((l) => l.id === id.split("|")[1])?.label} <span className="font-normal text-neutral-400">· {f.name}</span></p>
+                <p className="mb-1 text-xs font-medium">{LOOKS.find((l) => l.id === id.split("|")[1])?.label} <span className="font-normal text-neutral-400">· take {Number(id.split("|")[2] ?? 0) + 1} · {f.name}</span></p>
                 {f.status === "loading" && <p className="py-8 text-center text-xs text-neutral-500">Generating…</p>}
                 {f.status === "failed" && <p className="text-xs text-red-600">{f.error}</p>}
                 {f.status === "done" && f.url && (
@@ -605,6 +675,33 @@ export default function VideoPage() {
                     <p className="py-10 text-center text-xs text-neutral-500">
                       {j.note ?? (j.status === "queued" ? "Queued at fal.ai…" : j.status === "running" ? "Generating… (usually 2-6 minutes)" : "Starting…")}
                     </p>
+                  )}
+                  {j.tweak && <p className="mt-2 text-xs text-neutral-500">Change: {j.tweak}</p>}
+                  {(j.status === "done" || j.status === "failed") && j.request && (
+                    <div className="mt-2">
+                      {redoOpen === j.id ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            redo(j, redoText);
+                          }}
+                          className="flex gap-2"
+                        >
+                          <input
+                            autoFocus
+                            value={redoText}
+                            onChange={(e) => setRedoText(e.target.value)}
+                            placeholder="e.g. make the sun higher and a lighter orange"
+                            className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
+                          />
+                          <button className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white">Redo</button>
+                        </form>
+                      ) : (
+                        <button onClick={() => { setRedoOpen(j.id); setRedoText(""); }} className="text-xs text-neutral-500 underline">
+                          Change it and redo…
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               );
