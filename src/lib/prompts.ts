@@ -32,7 +32,7 @@ export type DeclutterIntensity = "light" | "heavy";
  *   recovers detail, kills motion blur/noise/haze. Always exterior/aerial by
  *   nature, so it doesn't use the Interior/Exterior mode at all.
  */
-export type EnhanceType = "standard" | "night";
+export type EnhanceType = "standard" | "night" | "sunny";
 
 /** Which sky reference image Twilight jobs should be composited against. */
 export type TwilightSky = "orange" | "purple" | "blue";
@@ -137,6 +137,20 @@ export const ENHANCE_EXTERIOR_PROMPT = `You are professionally finishing an exte
 DO — LAWN IS THE TOP PRIORITY: if real grass is visible, getting the lawn right is the main goal of this edit. First silently score the lawn from 0 to 100 on density, evenness, colour, weeds, bare or thin spots and mowing. Only a lawn that scores 90 or above (essentially perfect already) is left exactly as it is. ANY lawn scoring below 90 — including one that is mostly green but weedy, clumpy, uneven, thin, patchy, stripy or dull — must be REPLACED COMPLETELY: re-lay the ENTIRE lawn area edge to edge as one lush, dense, evenly healthy, freshly-mown real lawn. Do not patch gaps and do not leave any of the old weedy clumps, tufts, long blades, bare soil or colour patches showing anywhere on that lawn. The new grass is fine, short, dense natural blades with soft natural tonal variation, scaled correctly for perspective (finer and denser with distance), and it must look like a real photographed lawn: never combed, swirled, painted, striped, perfectly flat-uniform, plastic or synthetic. Keep everything standing on the lawn (play equipment, furniture, pots) and their natural shadows, and keep the lawn's real edges against paving, walls and garden beds clean and unchanged. Artificial turf stays exactly as photographed: never add blades, never turn it into real grass, keep its edges and seams straight. This is a full ground-level tidy-up, not a lawn-only pass: also clean up exposed dirt or bare patches, mud, weedy or messy garden bed edges, and dirty or stained pathways/driveways in the SAME pass as the lawn — dirt/bare patches should be reduced or blended into the surrounding healthy lawn where realistic, and pathways/driveways should look clean and swept, same material and layout, just tidier. Correct exposure, white balance and colour to a bright, natural, professional grade through LIGHT, not through a colour wash over surfaces; make garden beds and hard surfaces look clean and well maintained, keeping greenery at its natural colour; sharpen subtly. Most skies are already fine as photographed and should be left alone — only if the sky is genuinely washed out, hazy or flat should you deepen it, and even then only a small, subtle nudge back toward natural, never a strong or dramatic push. Render/painted walls, trim and any other neutral-coloured surface (white, off-white, cream, grey) MUST read as that same true neutral colour in the result — do not let white or off-white walls, render or trim shift towards pink, magenta, purple, orange or yellow. If a wall was white before, it must still look white after, just better lit. Only remove something if it is an obvious piece of visible mess directly in frame; do not go looking for clutter to remove.
 
 ABSOLUTELY DO NOT: alter the house roof, walls, brickwork, footprint, extensions, windows, or built structures; change the property boundaries, fences, or driveway layout; replace the sky's content or change the weather/time of day; saturate or deepen the sky beyond a small, subtle correction on a genuinely washed-out sky — never produce an intensely saturated, vivid, or artificial-looking blue; a sky that was already a normal, natural blue must be left as it was, not made richer; remove, add or alter any neighbouring house, building, road, power line or structure; add pools, gardens, trees or landscaping features that are not there; apply a colour tint, wash or cast to walls, render, trim or other neutral surfaces — no pink, magenta, purple, orange or yellow tinge on anything that was originally white, off-white or grey. Preserve the true building and layout and every permanent structure EXACTLY as photographed, from the same viewpoint. Photorealistic and believable only.`;
+
+/**
+ * "Enhance" tab, "Sunny" type: converts an overcast / flat-light exterior into a realistic, luxury, cinematic
+ * sunny-day photograph. The frame itself is kept exactly; only the sky, sunlight, shadows and colour change.
+ */
+export const ENHANCE_SUNNY_PROMPT = `You are professionally converting an overcast, grey or flat-light exterior photograph of a property into a luxury, cinematic, sunny-day photograph, as if the exact same frame had been shot on a perfect clear day by a top architectural and drone photographer.
+
+Use the supplied photo as the exact base image. Keep the architecture, every object, the camera angle, perspective, framing, crop, image dimensions and aspect ratio exactly the same. This is a sky, sunlight and colour change only.
+
+DO: Replace the grey or washed-out sky with a perfect clear sunny sky: a clean blue sky, graded naturally from a deeper blue at the top to a softer blue near the horizon, with at most a few soft, bright white clouds. Light the whole scene with strong, warm, natural sunlight from a single believable direction (high, slightly behind or to the side of the camera): bright sunlit faces on walls, roofs and paving, and soft, realistic, crisp-edged shadows that all fall consistently in the same direction and match the sun, including the shadows of the house, trees, balustrades and furniture. Add natural depth and contrast so the scene feels luxurious and cinematic, not flat: gentle highlight roll-off, rich but natural colour, clean whites, and warm sun on surfaces. Make the greenery lush and naturally green in the sun, keep real lawn as it is but let it catch the light, make any water clear and sparkling in a natural turquoise with believable sun glints and reflections, and let glass, windows and balustrades reflect the blue sky and sunlight realistically. Distant areas should show a very slight natural atmospheric depth, never murky grey haze.
+
+PHOTOREAL RULES: Real photographic light only. Never over-saturated, never neon, never an HDR look, no heavy bloom, no painted or fake sky, no orange cast. Walls, render and trim that are white, off-white, cream or grey must stay that true colour, only brighter and sunlit. The result must look like a genuine photograph taken on a beautiful day.
+
+HARD RULES, never break them: (1) Do not add, invent, extend or duplicate ANY building, tower, structure, land, mountain, boat, person, vehicle or object, especially at or near the horizon: what is open sea, sky or empty ground stays that. (2) Do not change, replace or restyle anything that exists: balustrades, glass, railings, furniture, finishes, colours and shapes stay exactly as photographed. (3) The camera position, angle, perspective, framing and crop stay identical to the source. Do not add text, logos or watermarks.`;
 
 /**
  * "Enhance" tab, "Night" type — a restoration pass for blurry night-time
@@ -463,7 +477,7 @@ export function usesLawnReference(tab: Tab, mode: Mode, enhanceType: EnhanceType
   return (
     provider === "fal" &&
     mode === "exterior" &&
-    ((tab === "enhance" && enhanceType !== "night") || tab === "declutter")
+    ((tab === "enhance" && enhanceType !== "night" && enhanceType !== "sunny") || tab === "declutter")
   );
 }
 
@@ -508,7 +522,9 @@ export function buildPrompt(
     }
   } else if (tab === "enhance") {
     base =
-      enhanceType === "night"
+      enhanceType === "sunny"
+        ? ENHANCE_SUNNY_PROMPT
+        : enhanceType === "night"
         ? ENHANCE_NIGHT_PROMPT
         : mode === "exterior"
           ? ENHANCE_EXTERIOR_PROMPT
@@ -521,7 +537,7 @@ export function buildPrompt(
     base = mode === "exterior" ? EXTERIOR_PROMPT : INTERIOR_PROMPT;
   }
 
-  if (tab === "enhance" && enhanceType !== "night" && mode === "exterior" && provider === "openai") {
+  if (tab === "enhance" && enhanceType !== "night" && enhanceType !== "sunny" && mode === "exterior" && provider === "openai") {
     base = base + "\n\n" + OPENAI_EXTERIOR_TEXTURE_INSTRUCTION;
   }
 
