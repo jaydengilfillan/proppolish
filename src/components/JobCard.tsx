@@ -67,7 +67,7 @@ export default function JobCard({ job, onRetry, onRemove }: Props) {
         <div className="flex shrink-0 items-center gap-1">
           {job.tab === "twilight" ? (
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">
-              {job.scene === "night_city" ? "Night city" : job.scene === "night" ? "Night" : job.scene === "gold_coast_hero" ? "Warm cinematic" : job.scene === "gold_coast_architectural" ? "Architectural" : SKY_LABEL[job.sky ?? "orange"]}
+              {job.scene === "night_city" ? "Night city" : job.scene === "night" ? "Night" : job.scene === "night_bright" ? "Night, bright facade" : job.scene === "gold_coast_hero" ? "Warm cinematic" : job.scene === "gold_coast_architectural" ? "Architectural" : SKY_LABEL[job.sky ?? "orange"]}
             </span>
           ) : job.tab !== "general" ? (
             <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium bg-neutral-100 text-neutral-500">

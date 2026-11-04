@@ -65,7 +65,7 @@ export type TwilightStyle = "natural" | "golden";
  *   locked exactly as photographed. Always treated as exterior/aerial —
  *   there's no "interior" version of a skyline shot.
  */
-export type TwilightScene = "dusk" | "night" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
+export type TwilightScene = "dusk" | "night" | "night_bright" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
 
 /**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
@@ -335,6 +335,22 @@ ABSOLUTELY DO NOT: add, remove, move or resize any building, structure, tree, fe
 Keep it fully photorealistic and believable: no over-processing, no HDR halos, no fake glow or bloom, no warped or melted surfaces.`;
 
 /**
+ * "night_bright": night sky, but the facade / property stays bright and clearly visible instead of falling into
+ * darkness. Only lights that already exist in the photo are switched on; no new fixtures are invented.
+ */
+export const TWILIGHT_NIGHT_BRIGHT_PROMPT = `You are professionally converting a daytime real estate photograph of an exterior (a facade, front of house, pool, garden or entertaining area) into a night-time photograph in which the PROPERTY STAYS BRIGHT AND CLEARLY VISIBLE, the way a professional architectural photographer exposes a night shot so the building is the hero.
+
+DO: Turn the sky into a natural deep night sky (deep navy to black, very soft glow at the horizon, a few faint stars). Keep the facade, walls, doors, windows, roofline, landscaping and paving WELL EXPOSED and bright: lift the overall exposure on the property so its colours, materials and detail stay clean and readable, with only gentle, natural falloff into shadow. The brightness should look like soft, even, believable night-time illumination from the lights that are genuinely there, never like daylight and never like a dark, murky night. Switch on ONLY lights that already exist in the photo (existing windows with interior lights, existing downlights, wall lights, pool and garden lights, lamps and street lights that are visible); give them a warm, natural glow. Keep the camera angle, framing, composition and every permanent feature exactly the same.
+
+LIGHTING RULE, VERY IMPORTANT: do NOT add any light fixtures, uplights, downlights, wall lights, strip lights, string lights, lanterns, spotlights or glowing objects that are not already visible in the original photo. Do not invent lit windows where there are none visible or add glowing features. Brightness must come from exposure and soft ambient light, not from new lights being added.
+
+BACKGROUND RULE: do NOT add a city skyline, high-rise buildings, towers, city lights or any new buildings or structures. Whatever is behind the property stays exactly what the photo shows, just darkened to night.
+
+ABSOLUTELY DO NOT: add, remove, move or resize any building, structure, tree, fence, balustrade or object; change the architecture, materials, colours or finishes; change the camera angle or framing; add people, cars or dramatic elements; alter or invent signage or text. This is a lighting and time-of-day change only.
+
+Keep it fully photorealistic: no over-processing, no HDR halos, no fake glow or bloom, no warped or melted surfaces.`;
+
+/**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
  * Enhance jobs. gpt-image-2 handles fine surface texture work well, so we ask it
  * to specifically look at hard surfaces (driveways, paths, gutters, downpipes,
@@ -478,6 +494,8 @@ export function buildPrompt(
       base = mode === "interior" ? GOLD_COAST_ARCH_INTERIOR_PROMPT : GOLD_COAST_ARCH_PROMPT;
     } else if (scene === "gold_coast_hero") {
       base = mode === "interior" ? GOLD_COAST_HERO_INTERIOR_PROMPT : GOLD_COAST_HERO_PROMPT;
+    } else if (scene === "night_bright") {
+      base = TWILIGHT_NIGHT_BRIGHT_PROMPT;
     } else if (scene === "night") {
       base = TWILIGHT_NIGHT_PROMPT;
     } else if (scene === "night_city") {
