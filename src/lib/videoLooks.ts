@@ -117,9 +117,9 @@ export const LOOKS: Look[] = [
     label: "Night",
     group: "natural",
     night: true,
-    blurb: "Night, lights on, clearly visible",
+    blurb: "Natural night, realistic and usable",
     video:
-      "night time: a dark navy sky with a few faint stars, every interior and exterior light switched on and glowing warm, windows warm lit, pool lights on if there is a pool, exposed like a professional night real-estate photograph so the property stays clearly visible",
+      "a natural, realistic night-time photograph: a deep navy to black night sky with a few faint stars and NO moon, a very soft glow at the horizon. Only the lights that already exist in the scene are switched on (lit windows, existing downlights, wall lights, pool and garden lights, street lights) with a warm, natural, believable glow at realistic brightness. The property stays clearly visible and well exposed like a professional night real-estate photograph, with natural colour, moderate saturation, deep but detailed shadows and natural reflections in water and glass. Real photographic light only: no HDR look, no glow or bloom, no lens flare, no painted or neon colours, no blue or purple colour cast. Do not add any lights, fixtures or glowing objects that are not already there.",
     sphere: { dir: [0.0, 0.2, 1.0], key: [255, 200, 140], ambient: [15, 22, 50], softness: 0.7 },
   },
   {
@@ -161,16 +161,6 @@ export const LOOKS: Look[] = [
     video:
       "a real twilight photograph shot about 15 minutes after sunset: a natural sky gradient from deep blue overhead to a soft pale peach glow at the horizon, a soft even blue ambient light on the building and ground, interior lights and windows glowing a believable warm tungsten colour that is not blown out, exterior and pool lights on at realistic brightness, subtle natural reflections, properly exposed so the architecture stays clearly visible. Real photographic light only: believable exposure, natural colour, moderate saturation, no HDR look, no glow or bloom, no lens flare, no painted or neon colours.",
     sphere: { dir: [0.0, 0.15, 1.0], key: [255, 160, 90], ambient: [30, 55, 140], softness: 0.45 },
-  },
-  {
-    id: "moonlit",
-    label: "Moonlit night",
-    group: "cinematic",
-    night: true,
-    blurb: "Moon-washed night, warm lit windows",
-    video:
-      "a real moonlit night photograph: a dark navy sky with a soft moon and faint stars, gentle cool blue ambient light on the scene, warm windows and lights glowing at realistic brightness, natural reflections on water, exposed like a professional night real-estate photograph. Real photographic light only: believable exposure, natural colour, moderate saturation, no HDR look, no glow or bloom, no lens flare, no painted or neon colours.",
-    sphere: { dir: [-0.4, 0.8, 0.45], key: [170, 195, 255], ambient: [18, 28, 70], softness: 0.4 },
   },
 ];
 
