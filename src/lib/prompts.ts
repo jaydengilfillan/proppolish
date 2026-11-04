@@ -58,13 +58,14 @@ export type TwilightStyle = "natural" | "golden";
  * - "gold_coast_hero" (shown as "Warm cinematic"): NOT a twilight look — a daytime relight/colour grade of a
  *   front-of-house shot into a bright, clean, warm Gold Coast magazine hero.
  *   Exterior or interior (each has its own prompt), no reference image. Lives under Twilight for ease of use.
+ * - "night": plain night conversion for pool/facade/garden shots, never adds a city skyline.
  * - "night_city": converts a daytime balcony/rooftop/high-rise view of a
  *   city skyline into a full night cityscape — every building's windows lit,
  *   dark night sky, everything else (building shapes, layout, any signage)
  *   locked exactly as photographed. Always treated as exterior/aerial —
  *   there's no "interior" version of a skyline shot.
  */
-export type TwilightScene = "dusk" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
+export type TwilightScene = "dusk" | "night" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
 
 /**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
@@ -320,6 +321,20 @@ ABSOLUTELY DO NOT (this is a legal requirement): add, remove, move or resize any
 Keep it fully photorealistic and believable — no over-processing, no HDR halos, no warped/melted buildings, no fake gloss, no invented skyline elements.`;
 
 /**
+ * "night": a plain night-time conversion for close-in exterior shots (pool, facade, garden, driveway). Unlike
+ * "night_city" it never builds or lights a city skyline: the background stays exactly what the photo shows.
+ */
+export const TWILIGHT_NIGHT_PROMPT = `You are professionally converting a daytime real estate photograph of an exterior (a pool, a facade, a garden, a driveway or an outdoor entertaining area) into a realistic night-time photograph, as if the same shot were taken well after dark by a skilled architectural photographer.
+
+DO: Turn the sky into a natural deep night sky (deep navy to black, with a very soft glow near the horizon and a few faint stars, no moon unless one is already visible). Light the property for night: warm glowing windows and doors, any existing exterior, garden, path, pool and feature lights switched on with believable soft pools of warm light, a gently glowing pool in a natural light blue if there is one, subtle warm light spilling onto paving, walls and landscaping, and realistic reflections in water and glass. Keep the exposure believable and the shadows deep but with detail still visible. Keep the camera angle, framing, composition and every permanent feature exactly the same.
+
+BACKGROUND RULE, VERY IMPORTANT: do NOT add a city skyline, high-rise buildings, distant towers, city lights, or any new buildings or structures behind or around the property. Whatever is behind the property in the original (trees, sky, sea, neighbouring houses, empty horizon) stays exactly that, just darkened to night. Distant lights may only appear where the original already shows buildings.
+
+ABSOLUTELY DO NOT: add, remove, move or resize any building, structure, tree, fence, balustrade or object; change the architecture, materials, colours or finishes of anything; change the camera angle or framing; add people, cars, fireworks, aircraft or any dramatic elements; alter or invent any signage or text. This is a lighting and time-of-day change only.
+
+Keep it fully photorealistic and believable: no over-processing, no HDR halos, no fake glow or bloom, no warped or melted surfaces.`;
+
+/**
  * Extra instruction appended only for the OpenAI (ChatGPT) provider on exterior
  * Enhance jobs. gpt-image-2 handles fine surface texture work well, so we ask it
  * to specifically look at hard surfaces (driveways, paths, gutters, downpipes,
@@ -463,6 +478,8 @@ export function buildPrompt(
       base = mode === "interior" ? GOLD_COAST_ARCH_INTERIOR_PROMPT : GOLD_COAST_ARCH_PROMPT;
     } else if (scene === "gold_coast_hero") {
       base = mode === "interior" ? GOLD_COAST_HERO_INTERIOR_PROMPT : GOLD_COAST_HERO_PROMPT;
+    } else if (scene === "night") {
+      base = TWILIGHT_NIGHT_PROMPT;
     } else if (scene === "night_city") {
       base = TWILIGHT_NIGHT_CITYSCAPE_PROMPT;
     } else if (mode === "exterior") {

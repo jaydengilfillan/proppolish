@@ -15,7 +15,7 @@ export interface Job {
   sky?: TwilightSky;
     /** Interior look — "natural" (true wall colour) or "golden" (warm ambient glow). Only meaningful when tab === "twilight" && mode === "interior" && scene === "dusk". */
   style?: TwilightStyle;
-    /** "dusk" (default sunset/twilight) vs "night_city" (full night cityscape conversion, e.g. a balcony skyline shot) vs "gold_coast_architectural" (bright airy architectural grade) vs "gold_coast_hero" (daytime front-of-house relight/colour grade). Only meaningful when tab === "twilight". */
+    /** "dusk" (default sunset/twilight) vs "night" (plain night, no city) vs "night_city" (full night cityscape conversion, e.g. a balcony skyline shot) vs "gold_coast_architectural" (bright airy architectural grade) vs "gold_coast_hero" (daytime front-of-house relight/colour grade). Only meaningful when tab === "twilight". */
   scene?: TwilightScene;
     /** Light (small tidy-up) vs heavy (full declutter) — only meaningful when tab === "declutter". */
   intensity?: DeclutterIntensity;
