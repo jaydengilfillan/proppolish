@@ -25,7 +25,7 @@ interface ProcessBody {
   style?: unknown; // "natural" | "golden" (only meaningful when tab === "twilight" && mode === "interior")
   intensity?: unknown; // "light" | "heavy" (only meaningful when tab === "declutter")
   enhanceType?: unknown; // "standard" | "night" (only meaningful when tab === "enhance")
-  scene?: unknown; // "dusk" | "night_city" | "gold_coast_hero" | "gold_coast_architectural" (only meaningful when tab === "twilight")
+  scene?: unknown; // "dusk" | "night" | "night_city" | "gold_coast_hero" | "gold_coast_architectural" (only meaningful when tab === "twilight")
   customPrompt?: unknown; // the user's own prompt text — required when tab === "general"
   referenceImage?: unknown; // Room Match: URL/data URI of the anchor's staged result, only meaningful when tab === "restage"
   referenceImages?: unknown; // Prompt tab: array of up to 2 style/content reference data URIs, only meaningful when tab === "general"
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
     const scene: TwilightScene =
-      body.scene === "night_city" ? "night_city" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
+      body.scene === "night_city" ? "night_city" : body.scene === "night" ? "night" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
     // Twilight is a Nano Banana (FAL) multi-image edit, except the Architectural
     // exterior which uses ChatGPT (its light is better; the client then restores
     // the original's real foliage/texture via relightTransfer).
