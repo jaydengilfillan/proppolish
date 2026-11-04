@@ -58,6 +58,7 @@ const STYLE_LABEL: Record<TwilightStyle, string> = {
 const SCENE_LABEL: Record<TwilightScene, string> = {
   dusk: "Twilight",
   night: "Night",
+  night_bright: "Night, bright facade",
   night_city: "Night city",
   gold_coast_hero: "Warm cinematic",
   gold_coast_architectural: "Architectural",
@@ -213,6 +214,7 @@ export default function Home() {
           source.originalWidth > nativeSize.width * 1.05 &&
           source.scene !== "night_city" &&
           source.scene !== "night" &&
+          source.scene !== "night_bright" &&
           source.originalUrl
         ) {
           finalUrl = await restoreDetailOrKeep(finalUrl, source.originalUrl);
@@ -269,7 +271,7 @@ export default function Home() {
       const mode =
         tab === "enhance" && enhanceType === "night"
           ? "exterior"
-          : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "night")
+          : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright")
             ? "exterior"
             : overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
@@ -635,7 +637,7 @@ export default function Home() {
       {view === "process" &&
         activeTab !== "general" &&
         !(activeTab === "enhance" && enhanceType === "night") &&
-        !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "night")) && (
+        !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright")) && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
