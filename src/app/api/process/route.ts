@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
     const scene: TwilightScene =
-      body.scene === "night_city" ? "night_city" : body.scene === "night" ? "night" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
+      body.scene === "night_city" ? "night_city" : body.scene === "night" ? "night" : body.scene === "night_bright" ? "night_bright" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
     // Twilight is a Nano Banana (FAL) multi-image edit, except the Architectural
     // exterior which uses ChatGPT (its light is better; the client then restores
     // the original's real foliage/texture via relightTransfer).
