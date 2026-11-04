@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     const sky: TwilightSky = body.sky === "purple" ? "purple" : body.sky === "blue" ? "blue" : "orange";
     const style: TwilightStyle = body.style === "golden" ? "golden" : "natural";
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
-    const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : "standard";
+    const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : body.enhanceType === "sunny" ? "sunny" : "standard";
     const scene: TwilightScene =
       body.scene === "night_city" ? "night_city" : body.scene === "night" ? "night" : body.scene === "night_bright" ? "night_bright" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
     // Twilight is a Nano Banana (FAL) multi-image edit, except the Architectural

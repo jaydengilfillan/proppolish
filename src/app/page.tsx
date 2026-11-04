@@ -72,6 +72,7 @@ const INTENSITY_LABEL: Record<DeclutterIntensity, string> = {
 const ENHANCE_TYPE_LABEL: Record<EnhanceType, string> = {
   standard: "Standard",
   night: "Night (drone)",
+  sunny: "Sunny conversion",
 };
 
 const MODE_LABEL: Record<Mode, string> = {
@@ -203,7 +204,7 @@ export default function Home() {
         const lightOnlyExterior =
           source.mode === "exterior" &&
           ((source.tab === "twilight" && source.scene === "gold_coast_architectural") ||
-            (source.tab === "enhance" && source.enhanceType !== "night"));
+            (source.tab === "enhance" && source.enhanceType !== "night" && source.enhanceType !== "sunny"));
         if (lightOnlyExterior && source.originalWidth && source.originalUrl) {
           // Keep the original's own pixels (foliage, grass, texture) and borrow
           // only the AI's light and colour.
@@ -269,7 +270,7 @@ export default function Home() {
       // prompt itself ignores mode, but keep the Job's own mode field honest
       // rather than leaving it as whatever Interior/Exterior was last picked.
       const mode =
-        tab === "enhance" && enhanceType === "night"
+        tab === "enhance" && (enhanceType === "night" || enhanceType === "sunny")
           ? "exterior"
           : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright")
             ? "exterior"
@@ -636,7 +637,7 @@ export default function Home() {
           auto-processed wrong mode, then again on Retry after switching it). */}
       {view === "process" &&
         activeTab !== "general" &&
-        !(activeTab === "enhance" && enhanceType === "night") &&
+        !(activeTab === "enhance" && (enhanceType === "night" || enhanceType === "sunny")) &&
         !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright")) && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
