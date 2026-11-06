@@ -204,7 +204,7 @@ export async function conformToSize(url: string, width: number, height: number):
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(bmp, 0, 0, width, height);
     const out = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.97)
+      canvas.toBlob(resolve, "image/jpeg", 1)
     );
     if (!out) throw new Error("Could not encode the resized image.");
     return URL.createObjectURL(out);
@@ -317,7 +317,7 @@ export async function restoreDetailOrKeep(resultUrl: string, referenceUrl: strin
     const ctx = c.getContext("2d");
     if (!ctx) return resultUrl;
     ctx.putImageData(new ImageData(new Uint8ClampedArray(res.data), out.width, out.height), 0, 0);
-    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.97));
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 1));
     return blob ? URL.createObjectURL(blob) : resultUrl;
   } catch (err) {
     console.warn("restoreDetailOrKeep failed; keeping AI result", err);
@@ -377,7 +377,7 @@ export async function relightOrKeep(resultUrl: string, referenceUrl: string): Pr
     const ctx = c.getContext("2d");
     if (!ctx) return resultUrl;
     ctx.putImageData(new ImageData(new Uint8ClampedArray(res.data), ref.width, ref.height), 0, 0);
-    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.97));
+    const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 1));
     return blob ? URL.createObjectURL(blob) : resultUrl;
   } catch (err) {
     console.warn("relightOrKeep failed; keeping AI result", err);
