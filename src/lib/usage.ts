@@ -181,6 +181,19 @@ export async function getWeeklyTotal(username: string): Promise<number> {
   }
 }
 
+/** Admin: zero a user's current-week total (history log is kept). */
+export async function resetWeeklyTotal(username: string): Promise<boolean> {
+  const redis = getRedis();
+  if (!redis || !username) return false;
+  try {
+    await redis.del(`usage:total:${isoWeekKey()}:${username}`);
+    return true;
+  } catch (err) {
+    console.error("resetWeeklyTotal failed:", err);
+    return false;
+  }
+}
+
 /** Most recent job history for a single user, newest first. */
 export async function getHistory(username: string, limit = 100): Promise<(UsageEntry & { username: string })[]> {
   const redis = getRedis();
