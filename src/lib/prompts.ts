@@ -479,6 +479,17 @@ export function usesLawnReference(tab: Tab, mode: Mode, enhanceType: EnhanceType
 
 export const LAWN_REFERENCE_NOTE = `A second reference image is attached. It shows the target quality of a healthy, natural lawn: dense, fine, short blades, soft natural variation in tone, no bare spots. Use it as the model for the replacement lawn: match its grass texture, blade size, density and colour across the whole real lawn in the first photo, and scale the blades to match the photo's perspective (finer and denser with distance). Do not copy anything else from it, do not add grass where there is none (paths, driveways, paving, soil under shrubs, artificial turf), and never change any other part of the first photo.`;
 
+/**
+ * Appended to every twilight / night conversion. These keep failing the same way when the source is a daytime
+ * shot: the model just darkens the daytime exposure, keeps the hard sun and tree shadows, and drops the facade into a
+ * dark muddy yellow. A twilight HERO shot is the opposite: a bright, evenly balanced subject under a rich dusk sky.
+ */
+export const TWILIGHT_HERO_BALANCE = `HIGHEST PRIORITY, HERO EXPOSURE AND LIGHT BALANCING (this overrides any earlier instruction that conflicts with it): The result is a HERO shot for a premium listing, not a darkened copy of the daytime photo. Do not simply lower the brightness of the daytime image. Rebuild the lighting for dusk the way a professional twilight photographer exposes and balances it:
+(1) The facade and the whole subject property (walls, render, cladding, roof, doors, garage, paving, decking, pool area, entertaining areas) must stay relatively bright, evenly lit and clearly readable, at roughly the exposure level they had in the daytime photo, with soft even fill so nothing sinks into darkness. Brightness comes from exposure and soft ambient light, NOT from adding any new light fixtures, glows or lit features that are not already there.
+(2) REMOVE ALL HARD SHADOWS. There is no sun at twilight, so every hard-edged, directional daylight shadow in the source must be removed and replaced with soft, diffuse, even ambient light: dappled or hard tree and palm shadows across walls, lawn, paving and driveways, sharp eave, roofline and structure shadows on the facade, and harsh sunlit-versus-shaded contrast. Shadow areas must be lifted and opened up so the facade and ground read evenly lit with only gentle, natural depth. Do not leave daytime shadow patterns behind.
+(3) NO DARK YELLOW OR MUDDY CAST. Do not wash the facade, walls or ground in a dark yellow, amber, brown or sepia tint. Keep the building's true material colours (white and off-white render stays clean, light and neutral, brick, timber and stone stay their real colours). Warm light belongs only in the glowing windows and real fixtures and the soft spill immediately around them, while the rest of the property sits in clean, balanced, slightly cool dusk ambient light that complements the warm glow.
+(4) Keep the contrast between the lit property and the sky rich and cinematic, but with the property always the brightest, clearest part of the frame after the windows.`;
+
 export function buildPrompt(
   tab: Tab,
   mode: Mode,
@@ -531,6 +542,10 @@ export function buildPrompt(
     base = mode === "exterior" ? DECLUTTER_LIGHT_EXTERIOR_PROMPT : DECLUTTER_LIGHT_INTERIOR_PROMPT;
   } else {
     base = mode === "exterior" ? EXTERIOR_PROMPT : INTERIOR_PROMPT;
+  }
+
+  if (tab === "twilight" && (scene === "dusk" || scene === "night" || scene === "night_city" || scene === "night_bright")) {
+    base = base + "\n\n" + TWILIGHT_HERO_BALANCE;
   }
 
   if (tab === "enhance" && enhanceType !== "night" && enhanceType !== "sunny" && mode === "exterior" && provider === "openai") {
