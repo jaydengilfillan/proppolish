@@ -62,6 +62,17 @@ export default function UsageAdmin() {
       .finally(() => setLoading(false));
   }, []);
 
+  const resetUser = async (username: string) => {
+    if (!window.confirm(`Reset ${username}'s credits for this week?`)) return;
+    const r = await fetch("/api/usage/admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    if (!r.ok) setError("Reset failed.");
+    load();
+  };
+
   useEffect(() => {
     load();
   }, [load]);
@@ -107,6 +118,12 @@ export default function UsageAdmin() {
                       <span className="ml-1 text-xs text-neutral-400">this week</span>
                     </span>
                   </div>
+                  <button
+                    onClick={() => resetUser(u.username)}
+                    className="mb-2 text-xs text-neutral-400 underline hover:text-neutral-800"
+                  >
+                    Reset credits
+                  </button>
                   {pct !== null && (
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
                       <div
