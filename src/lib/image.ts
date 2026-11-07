@@ -384,3 +384,69 @@ export async function relightOrKeep(resultUrl: string, referenceUrl: string): Pr
     return resultUrl;
   }
 }
+
+/**
+ * Free, local "sun flattening" pre-pass for Twilight. The AI model keeps the
+ * pixels it is given, so hard sun/shade patterns in a bright daytime photo
+ * survive into the dusk result. This compresses LARGE-scale light differences
+ * (sunlit lawn vs shadowed lawn, lit wall vs eave shadow) on the copy that is
+ * sent to the model, so it starts from soft even light. Nothing is removed or
+ * moved (no objects change), no extra generation cost. Never throws.
+ */
+export async function flattenSunShadows(dataUri: string, strength = 0.7): Promise<string> {
+  try {
+    const img = await loadImage(dataUri);
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return dataUri;
+    ctx.drawImage(img, 0, 0);
+    const src = ctx.getImageData(0, 0, w, h);
+    // Heavily blurred copy = the large-scale light map.
+    const sw = 96;
+    const sh = Math.max(1, Math.round((h / w) * sw));
+    const small = document.createElement("canvas");
+    small.width = sw;
+    small.height = sh;
+    const sctx = small.getContext("2d", { willReadFrequently: true });
+    if (!sctx) return dataUri;
+    sctx.imageSmoothingQuality = "high";
+    sctx.drawImage(img, 0, 0, sw, sh);
+    const big = document.createElement("canvas");
+    big.width = w;
+    big.height = h;
+    const bctx = big.getContext("2d", { willReadFrequently: true });
+    if (!bctx) return dataUri;
+    bctx.imageSmoothingEnabled = true;
+    bctx.imageSmoothingQuality = "high";
+    bctx.drawImage(small, 0, 0, w, h);
+    const blur = bctx.getImageData(0, 0, w, h).data;
+    const d = src.data;
+    let sum = 0;
+    const n = w * h;
+    for (let i = 0; i < n; i++) {
+      const o = i * 4;
+      sum += 0.2126 * blur[o] + 0.7152 * blur[o + 1] + 0.0722 * blur[o + 2];
+    }
+    const mid = Math.max(40, sum / n);
+    for (let i = 0; i < n; i++) {
+      const o = i * 4;
+      const bl = Math.max(12, 0.2126 * blur[o] + 0.7152 * blur[o + 1] + 0.0722 * blur[o + 2]);
+      let g = Math.pow(mid / bl, strength);
+      g = g < 0.75 ? 0.75 : g > 2.2 ? 2.2 : g;
+      d[o] = Math.min(255, d[o] * g);
+      d[o + 1] = Math.min(255, d[o + 1] * g);
+      d[o + 2] = Math.min(255, d[o + 2] * g);
+    }
+    ctx.putImageData(src, 0, 0);
+    let out = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+    if (estimateBytes(out) > MAX_UPLOAD_BYTES) out = canvas.toDataURL("image/jpeg", 0.8);
+    return estimateBytes(out) > MAX_UPLOAD_BYTES ? dataUri : out;
+  } catch (err) {
+    console.warn("flattenSunShadows failed; sending the original", err);
+    return dataUri;
+  }
+}
