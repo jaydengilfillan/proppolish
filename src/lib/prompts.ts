@@ -65,7 +65,7 @@ export type TwilightStyle = "natural" | "golden";
  *   locked exactly as photographed. Always treated as exterior/aerial —
  *   there's no "interior" version of a skyline shot.
  */
-export type TwilightScene = "dusk" | "night" | "night_bright" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
+export type TwilightScene = "dusk" | "dusk_clean" | "night" | "night_bright" | "night_city" | "gold_coast_hero" | "gold_coast_architectural";
 
 /**
  * Plain-text descriptions of each sky option, used for INTERIOR twilight jobs
@@ -355,6 +355,15 @@ Keep it fully photorealistic and believable: no over-processing, no HDR halos, n
  * "night_bright": night sky, but the facade / property stays bright and clearly visible instead of falling into
  * darkness. Only lights that already exist in the photo are switched on; no new fixtures are invented.
  */
+export const TWILIGHT_CLEAN_PROMPT = `THIS IS A FULL RELIGHT, NOT A SKY SWAP. You are converting a daytime real estate photograph of an exterior into a clean, evenly lit TWILIGHT BASE PLATE: the same scene about 25 minutes after sunset, with NO artificial lights and NO shadows, so a retoucher can add lights and windows afterwards. A second reference image shows the exact sky (colour, gradient, cloud pattern) to use.
+
+Use the supplied photo as the exact base image. Keep the house, landscaping, objects, framing, camera angle and every structure exactly as they are. Do not remove, add, move or thin anything, including trees, hedges, signs, mailboxes and fences. Only the lighting and the sky change.
+SKY: use the sky from the second reference image, a clean rich gradient, with the tree line and rooflines crisp against it and no halos.
+NO SHADOWS: the sun is gone, so there is no direct sunlight and no cast shadows anywhere. Remove every hard shadow from the original, including long dark shadows on the lawn and driveway from signs, mailboxes, hedges, trees and the house, eave and roofline shadows on walls, and sunlit-versus-shaded patches. Fill them with the same texture and colour as the surrounding surface. Every surface (walls, roof, lawn, driveway, hedges, neighbouring houses) is lit by soft, flat, even, diffuse dusk skylight.
+GENERALLY DARKER: overall exposure is clearly lower than the daytime photo, a calm, cool, dim dusk look, roughly two stops under daytime, evenly across the whole frame, with the sky the brightest area. Keep detail and true material colours visible, never black, never crushed, never muddy, and no yellow or orange cast on the walls or ground.
+NO LIGHTS: do not switch on or add any light at all. All windows stay as natural unlit glass reflecting the cool sky, with no interior glow. No downlights, eave lights, wall lights, garden lights, path lights, string lights, house-number or letterbox glow, and no glowing hotspots or light pools. If a fixture is visible in the original, leave it off.
+Photorealistic, sharp, natural, not blurry or painterly, no HDR halos, no stylisation.`;
+
 export const TWILIGHT_NIGHT_BRIGHT_PROMPT = `You are professionally converting a daytime real estate photograph of an exterior (a facade, front of house, pool, garden or entertaining area) into a night-time photograph in which the PROPERTY STAYS BRIGHT AND CLEARLY VISIBLE, the way a professional architectural photographer exposes a night shot so the building is the hero.
 
 DO: Turn the sky into a natural deep night sky (deep navy to black, very soft glow at the horizon, a few faint stars). Keep the facade, walls, doors, windows, roofline, landscaping and paving WELL EXPOSED and bright: lift the overall exposure on the property so its colours, materials and detail stay clean and readable, with only gentle, natural falloff into shadow. The brightness should look like soft, even, believable night-time illumination from the lights that are genuinely there, never like daylight and never like a dark, murky night. Switch on ONLY lights that already exist in the photo (existing windows with interior lights, existing downlights, wall lights, pool and garden lights, lamps and street lights that are visible); give them a warm, natural glow. Keep the camera angle, framing, composition and every permanent feature exactly the same.
@@ -523,6 +532,8 @@ export function buildPrompt(
       base = mode === "interior" ? GOLD_COAST_ARCH_INTERIOR_PROMPT : GOLD_COAST_ARCH_PROMPT;
     } else if (scene === "gold_coast_hero") {
       base = mode === "interior" ? GOLD_COAST_HERO_INTERIOR_PROMPT : GOLD_COAST_HERO_PROMPT;
+    } else if (scene === "dusk_clean") {
+      base = TWILIGHT_CLEAN_PROMPT;
     } else if (scene === "night_bright") {
       base = TWILIGHT_NIGHT_BRIGHT_PROMPT;
     } else if (scene === "night") {
