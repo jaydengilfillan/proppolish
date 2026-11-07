@@ -58,6 +58,7 @@ const STYLE_LABEL: Record<TwilightStyle, string> = {
 
 const SCENE_LABEL: Record<TwilightScene, string> = {
   dusk: "Twilight",
+  dusk_clean: "Twilight, no lights, no shadow",
   night: "Night",
   night_bright: "Night, bright facade",
   night_city: "Night city",
@@ -273,7 +274,7 @@ export default function Home() {
       const mode =
         tab === "enhance" && (enhanceType === "night" || enhanceType === "sunny")
           ? "exterior"
-          : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright")
+          : tab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright" || twilightScene === "dusk_clean")
             ? "exterior"
             : overrideMode ?? activeMode;
       const files = Array.from(fileList).filter((f) =>
@@ -644,7 +645,7 @@ export default function Home() {
       {view === "process" &&
         activeTab !== "general" &&
         !(activeTab === "enhance" && (enhanceType === "night" || enhanceType === "sunny")) &&
-        !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright")) && (
+        !(activeTab === "twilight" && (twilightScene === "night_city" || twilightScene === "night" || twilightScene === "night_bright" || twilightScene === "dusk_clean")) && (
         <div className="mb-4 flex items-center gap-2">
           <span className="text-xs text-neutral-500">Shot type:</span>
           <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
@@ -893,7 +894,7 @@ export default function Home() {
               wording used to describe the window view (no image is sent for
               interior — see prompts.ts). Dusk scene only — Night city
               describes its own night sky, no picker needed. */}
-          {activeTab === "twilight" && twilightScene === "dusk" && (
+          {activeTab === "twilight" && (twilightScene === "dusk" || twilightScene === "dusk_clean") && (
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs text-neutral-500">Sky:</span>
               <div className="flex gap-1 rounded-lg bg-neutral-100 p-1">
