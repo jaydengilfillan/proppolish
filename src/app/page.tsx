@@ -14,6 +14,7 @@ import {
 import type { Provider } from "@/lib/config";
 import {
   downscaleImage,
+  flattenSunShadows,
   conformOrKeep,
   restoreDetailOrKeep,
   relightOrKeep,
@@ -324,7 +325,12 @@ export default function Home() {
             referenceImages: referenceDataUris.length > 0 ? referenceDataUris : undefined,
             status: "queued",
             originalUrl,
-            downscaledDataUri: dataUri,
+            // Twilight exterior: soften the hard sun/shade pattern on the copy
+            // sent to the model (free, local, removes no objects).
+            downscaledDataUri:
+              tab === "twilight" && mode === "exterior" && twilightScene !== "gold_coast_architectural" && twilightScene !== "gold_coast_hero"
+                ? await flattenSunShadows(dataUri)
+                : dataUri,
             width,
             height,
             // Low-res originals (< 8 MB) are deliberately left without an
