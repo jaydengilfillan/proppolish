@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     const intensity: DeclutterIntensity = body.intensity === "light" ? "light" : "heavy";
     const enhanceType: EnhanceType = body.enhanceType === "night" ? "night" : body.enhanceType === "sunny" ? "sunny" : "standard";
     const scene: TwilightScene =
-      body.scene === "night_city" ? "night_city" : body.scene === "night" ? "night" : body.scene === "night_bright" ? "night_bright" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
+      body.scene === "dusk_clean" ? "dusk_clean" : body.scene === "night_city" ? "night_city" : body.scene === "night" ? "night" : body.scene === "night_bright" ? "night_bright" : body.scene === "gold_coast_hero" ? "gold_coast_hero" : body.scene === "gold_coast_architectural" ? "gold_coast_architectural" : "dusk";
     // Twilight is a Nano Banana (FAL) multi-image edit, except the Architectural
     // exterior which uses ChatGPT (its light is better; the client then restores
     // the original's real foliage/texture via relightTransfer).
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
   // only the actual photo is sent. Room Match appends the anchor's
   // already-staged result so this angle can be generated to match it.
   const imageUrls: string[] = [body.image as string];
-  if (tab === "twilight" && scene === "dusk" && mode === "exterior") {
+  if (tab === "twilight" && (scene === "dusk" || scene === "dusk_clean") && mode === "exterior") {
     const skyPath = TWILIGHT_SKIES[sky];
     imageUrls.push(new URL(skyPath, req.nextUrl.origin).toString());
   }
