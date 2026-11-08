@@ -123,7 +123,12 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     if (!mime) throw new Error("This browser can't make MP4 clips. Use Chrome or Safari.");
     // Record a little over the chosen length: the recorder stops a few frames early, and engines reject clips even 0.02s under their 3s minimum.
     const dur = loops > 1 ? video.duration * loops : Math.min(video.duration, secs + 0.6, 15);
-    const recorder = new MediaRecorder(canvas.captureStream(48), { mimeType: mime, videoBitsPerSecond: 12_000_000 });
+    // Manual frame pushing (captureStream(0) + requestFrame) so the recording gets a frame on every tick even when the picture hasn't changed.
+    const stream = canvas.captureStream(0);
+    const vtrack = stream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
+    const manual = !!vtrack?.requestFrame;
+    const liveStream = manual ? stream : canvas.captureStream(48);
+    const recorder = new MediaRecorder(liveStream, { mimeType: mime, videoBitsPerSecond: 12_000_000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
       if (e.data.size) chunks.push(e.data);
@@ -143,12 +148,31 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
       let finished = false;
       let watchdog = 0;
       // Repaint at a steady 48fps target even if the source decodes slowly (big drone files), so the recording never falls under the engines' 23fps minimum.
-      const painter = window.setInterval(() => ctx.drawImage(video, 0, 0, w, h), 1000 / 48);
+      // The timer lives in a Web Worker: browsers slow main-thread timers to ~1/sec when the tab is hidden or busy, which is what produced 12fps clips.
+      const paint = () => {
+        ctx.drawImage(video, 0, 0, w, h);
+        if (manual) vtrack!.requestFrame!();
+      };
+      let tickWorker: Worker | null = null;
+      let painter = 0;
+      try {
+        const src = `let t=setInterval(()=>postMessage(1),${(1000 / 48).toFixed(2)});onmessage=()=>{clearInterval(t);close()}`;
+        const wurl = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+        tickWorker = new Worker(wurl);
+        URL.revokeObjectURL(wurl);
+        tickWorker.onmessage = paint;
+      } catch {
+        painter = window.setInterval(paint, 1000 / 48);
+      }
       const finish = () => {
         if (finished) return;
         finished = true;
         window.clearInterval(watchdog);
         window.clearInterval(painter);
+        if (tickWorker) {
+          tickWorker.postMessage(0);
+          tickWorker.terminate();
+        }
         video.removeEventListener("ended", onEnded);
         resolve();
       };
@@ -181,7 +205,7 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
       watchdog = window.setInterval(check, 200);
       const tick = () => {
         if (finished) return;
-        ctx.drawImage(video, 0, 0, w, h);
+        paint();
         check();
         if (finished) return;
         if ("requestVideoFrameCallback" in video) (video as HTMLVideoElement).requestVideoFrameCallback(tick);
