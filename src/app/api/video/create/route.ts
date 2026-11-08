@@ -57,6 +57,6 @@ export async function POST(req: NextRequest) {
   if (!resp.ok) return NextResponse.json({ error: `${engine.label} refused the job (${resp.status}): ${text.slice(0, 300)}` }, { status: 502 });
   const json = JSON.parse(text) as { status_url?: string; response_url?: string };
   if (!json.status_url || !json.response_url) return NextResponse.json({ error: "fal returned no job URLs." }, { status: 502 });
-  await chargeCredits(req, cost, `create · ${engine.id}`);
+  await chargeCredits(req, cost, `create · ${engine.id}`, "fal", refs[0]?.url);
   return NextResponse.json({ statusUrl: json.status_url, responseUrl: json.response_url });
 }
