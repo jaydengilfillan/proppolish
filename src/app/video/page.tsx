@@ -127,7 +127,7 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
     const stream = canvas.captureStream(0);
     const vtrack = stream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
     const manual = !!vtrack?.requestFrame;
-    const liveStream = manual ? stream : canvas.captureStream(48);
+    const liveStream = manual ? stream : canvas.captureStream(30);
     const recorder = new MediaRecorder(liveStream, { mimeType: mime, videoBitsPerSecond: 12_000_000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
@@ -156,13 +156,13 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
       let tickWorker: Worker | null = null;
       let painter = 0;
       try {
-        const src = `let t=setInterval(()=>postMessage(1),${(1000 / 48).toFixed(2)});onmessage=()=>{clearInterval(t);close()}`;
+        const src = `let t=setInterval(()=>postMessage(1),${(1000 / 30).toFixed(2)});onmessage=()=>{clearInterval(t);close()}`;
         const wurl = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
         tickWorker = new Worker(wurl);
         URL.revokeObjectURL(wurl);
         tickWorker.onmessage = paint;
       } catch {
-        painter = window.setInterval(paint, 1000 / 48);
+        painter = window.setInterval(paint, 1000 / 30);
       }
       const finish = () => {
         if (finished) return;
@@ -205,7 +205,8 @@ async function prepareClip(file: File, secs: number, onProgress: (p: number) => 
       watchdog = window.setInterval(check, 200);
       const tick = () => {
         if (finished) return;
-        paint();
+        // With the worker timer running, ONLY it pushes frames (30fps); painting here too would double the frame rate (62fps was rejected).
+        if (!tickWorker) paint();
         check();
         if (finished) return;
         if ("requestVideoFrameCallback" in video) (video as HTMLVideoElement).requestVideoFrameCallback(tick);
