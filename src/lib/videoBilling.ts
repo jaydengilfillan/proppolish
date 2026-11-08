@@ -24,8 +24,8 @@ export async function checkCredits(req: NextRequest, cost: number): Promise<Next
 }
 
 /** Record a successful submission's estimated cost against the user. */
-export async function chargeCredits(req: NextRequest, cost: number, mode: string, provider = "fal"): Promise<void> {
+export async function chargeCredits(req: NextRequest, cost: number, mode: string, provider = "fal", imageUrl?: string): Promise<void> {
   const user = req.headers.get("x-pp-user");
   if (!user || !(cost > 0)) return;
-  await recordUsage(user, { tab: "video", mode, provider, cost: Math.round(cost * 1000) / 1000, at: Date.now() });
+  await recordUsage(user, { tab: "video", mode, provider, cost: Math.round(cost * 1000) / 1000, at: Date.now(), ...(imageUrl ? { imageUrl } : {}) });
 }
