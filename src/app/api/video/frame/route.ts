@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       resolution: "2K",
       aspectRatio: nearestFalAspectRatio(width, height),
     });
-    await chargeCredits(req, FRAME_COST_USD, `${look.id} · first frame`);
+    await chargeCredits(req, FRAME_COST_USD, `${look.id} · first frame`, "fal", url);
     return NextResponse.json({ url });
   } catch (err) {
     const status = err instanceof FalError ? err.status : 500;
