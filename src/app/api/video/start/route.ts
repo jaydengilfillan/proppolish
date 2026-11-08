@@ -66,6 +66,6 @@ export async function POST(req: NextRequest) {
   }
   const json = JSON.parse(text) as { status_url?: string; response_url?: string };
   if (!json.status_url || !json.response_url) return NextResponse.json({ error: "fal returned no job URLs." }, { status: 502 });
-  await chargeCredits(req, cost, `${look.id} · ${engine.id}`);
+  await chargeCredits(req, cost, `${look.id} · ${engine.id}`, "fal", isUrl(body.frameUrl) ? body.frameUrl : undefined);
   return NextResponse.json({ statusUrl: json.status_url, responseUrl: json.response_url });
 }
