@@ -15,6 +15,31 @@ interface FrameState {
   url?: string;
   error?: string;
 }
+interface RunCtx {
+  scene: string;
+  secs: number;
+  final: boolean;
+  width: number;
+  height: number;
+  videoUrl: string;
+  srcUrl: string;
+}
+interface PendingItem {
+  key: string;
+  look: string;
+  take: number;
+  frameUrl: string | null;
+  jobs: Job[];
+  tweak: string;
+  busy: boolean;
+  error?: string;
+}
+interface PendingBatch {
+  id: string;
+  name: string;
+  ctx: RunCtx;
+  items: PendingItem[];
+}
 interface Clip {
   file: File;
   url: string;
@@ -244,6 +269,10 @@ export default function VideoPage() {
   const { jobs: allJobs, addJobs, patchJob, removeJob, clearFinished, track } = useVideoStore();
   const jobs = useMemo(() => allJobs.filter((j) => j.kind === "relight"), [allJobs]);
   const [frames, setFrames] = useState<Record<string, FrameState>>({});
+  // Approve the still before paying for the video: stills wait here until you click Create video.
+  const [approveFirst, setApproveFirst] = useState(true);
+  const [pending, setPending] = useState<PendingBatch[]>([]);
+  const [stillText, setStillText] = useState<Record<string, string>>({});
   const fileInput = useRef<HTMLInputElement>(null);
   // Prepared + uploaded clip, reused when you generate another look from the same clip without reloading it.
   const preparedRef = useRef<{ key: string; promise: Promise<[string, string]> } | null>(null);
@@ -273,6 +302,10 @@ export default function VideoPage() {
     () => selectedLooks.flatMap((l) => selectedEngines.filter((e) => engineApplies(e, l) && secs >= (e.minSecs ?? 0)).map((e) => ({ look: l, engine: e }))),
     [selectedLooks, selectedEngines, secs]
   );
+  const stillsCost = useMemo(() => {
+    const frameLooks = new Set(pairs.filter((p) => p.engine.needsFrame).map((p) => p.look.id));
+    return frameLooks.size * takes * FRAME_COST_USD;
+  }, [pairs, takes]);
   const cost = useMemo(() => {
     const frameLooks = new Set(pairs.filter((p) => p.engine.needsFrame).map((p) => p.look.id));
     let total = frameLooks.size * takes * FRAME_COST_USD;
@@ -288,7 +321,7 @@ export default function VideoPage() {
   function generate() {
     if (!clip || pairs.length === 0) return;
     setError(null);
-    const snap = { clip, secs, loops, scene, final, takes, retries, pairs };
+    const snap = { clip, secs, loops, scene, final, takes, retries, pairs, approve: approveFirst };
     const batchId = `${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
     const newJobs: Job[] = snap.pairs.flatMap((p) =>
       Array.from({ length: snap.takes }, (_, t) => ({
@@ -310,12 +343,84 @@ export default function VideoPage() {
     void runBatch(batchId, snap, newJobs);
   }
 
+  /** Submit one job to the video engine. */
+  async function startOne(job: Job, ctx: RunCtx, frameUrl: string | null) {
+    const engine = ENGINES.find((e) => e.id === job.engine) as Engine;
+    const look = LOOKS.find((l) => l.id === job.look) as Look;
+    try {
+      let sphereUrl: string | undefined;
+      if (engine.needsSphere) {
+        sphereUrl = await uploadToFal(await dataUriToBlob(renderSphere(look)), `sphere-${look.id}.png`);
+      }
+      if (engine.needsFrame && !frameUrl) throw new Error("The relit first frame failed, so this one couldn't start.");
+      const body = {
+        engine: engine.id,
+        look: look.id,
+        scene: ctx.scene,
+        videoUrl: ctx.videoUrl,
+        frameUrl: frameUrl ?? undefined,
+        sphereUrl,
+        variant: job.take ?? 0,
+        tweak: job.tweak || undefined,
+        srcUrl: ctx.srcUrl,
+        secs: ctx.secs,
+        width: ctx.width,
+        height: ctx.height,
+        final: ctx.final,
+      };
+      patchJob(job.id, { request: { path: "/api/video/start", body }, note: "Submitting…" });
+      const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", body);
+      track(job.id, r.statusUrl, r.responseUrl);
+    } catch (e) {
+      patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
+    }
+  }
+
+  const dropPending = (batchId: string, key: string) =>
+    setPending((pp) => pp.map((b) => (b.id === batchId ? { ...b, items: b.items.filter((i) => i.key !== key) } : b)).filter((b) => b.items.length > 0));
+  const patchPending = (batchId: string, key: string, patch: Partial<PendingItem>) =>
+    setPending((pp) => pp.map((b) => (b.id === batchId ? { ...b, items: b.items.map((i) => (i.key === key ? { ...i, ...patch } : i)) } : b)));
+
+  /** Approve a still: now (and only now) the video is paid for and started. */
+  function approveStill(batch: PendingBatch, item: PendingItem) {
+    dropPending(batch.id, item.key);
+    item.jobs.forEach((j) => void startOne({ ...j, tweak: item.tweak || j.tweak }, batch.ctx, item.frameUrl));
+  }
+
+  function discardStill(batch: PendingBatch, item: PendingItem) {
+    dropPending(batch.id, item.key);
+    item.jobs.forEach((j) => removeJob(j.id));
+  }
+
+  /** Redo just the still with a typed adjustment (about $0.15), then approve again. */
+  async function redoStill(batch: PendingBatch, item: PendingItem, text: string) {
+    const t = text.trim();
+    const tweak = [item.tweak, t].filter(Boolean).join(". ");
+    patchPending(batch.id, item.key, { busy: true, error: undefined });
+    setStillText((m) => ({ ...m, [`${batch.id}|${item.key}`]: "" }));
+    try {
+      const r = await api<{ url: string }>("/api/video/frame", {
+        image: batch.ctx.srcUrl,
+        look: item.look,
+        scene: batch.ctx.scene,
+        variant: item.take,
+        tweak,
+        width: batch.ctx.width,
+        height: batch.ctx.height,
+      });
+      patchPending(batch.id, item.key, { busy: false, frameUrl: r.url, tweak });
+      setFrames((f) => ({ ...f, [`${batch.id}|${item.look}|${item.take}`]: { status: "done", url: r.url, name: batch.name } }));
+    } catch (e) {
+      patchPending(batch.id, item.key, { busy: false, error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
   async function runBatch(
     batchId: string,
-    snap: { clip: Clip; secs: number; loops: number; scene: string; final: boolean; pairs: { look: Look; engine: Engine }[] },
+    snap: { clip: Clip; secs: number; loops: number; scene: string; final: boolean; approve: boolean; pairs: { look: Look; engine: Engine }[] },
     newJobs: Job[]
   ) {
-    const { clip: c, secs: sSecs, loops: sLoops, scene: sScene, final: sFinal, pairs: sPairs } = snap;
+    const { clip: c, secs: sSecs, loops: sLoops, scene: sScene, final: sFinal, approve: sApprove, pairs: sPairs } = snap;
     const noteAll = (note: string) => newJobs.forEach((j) => patchJob(j.id, { note }));
     try {
       // 1) prepare + upload the clip
@@ -368,39 +473,25 @@ export default function VideoPage() {
         })
       );
 
-      // 3) start every job; the shared store tracks and retries them from here
+      // 3) start every job. With "approve the still first", jobs that use a relit still wait for you; the rest start now.
+      const ctx: RunCtx = { scene: sScene, secs: sSecs, final: sFinal, width: c.width, height: c.height, videoUrl, srcUrl };
+      const held = sApprove ? newJobs.filter((j) => (ENGINES.find((e) => e.id === j.engine) as Engine).needsFrame) : [];
+      const heldIds = new Set(held.map((j) => j.id));
+      if (held.length) {
+        const items: PendingItem[] = frameTasks.map(({ look, t }) => ({
+          key: `${look.id}|${t}`,
+          look: look.id,
+          take: t,
+          frameUrl: frameUrls[`${look.id}|${t}`] ?? null,
+          jobs: held.filter((j) => j.look === look.id && (j.take ?? 0) === t),
+          tweak: "",
+          busy: false,
+        })).filter((it) => it.jobs.length > 0);
+        setPending((pp) => [...pp, { id: batchId, name: c.file.name, ctx, items }]);
+        held.forEach((j) => patchJob(j.id, { note: "Waiting for you to approve the still (nothing charged for the video yet)" }));
+      }
       await Promise.all(
-        newJobs.map(async (job) => {
-          const engine = ENGINES.find((e) => e.id === job.engine) as Engine;
-          const look = LOOKS.find((l) => l.id === job.look) as Look;
-          try {
-            let sphereUrl: string | undefined;
-            if (engine.needsSphere) {
-              sphereUrl = await uploadToFal(await dataUriToBlob(renderSphere(look)), `sphere-${look.id}.png`);
-            }
-            const fid = `${look.id}|${job.take ?? 0}`;
-            if (engine.needsFrame && !frameUrls[fid]) throw new Error("The relit first frame failed, so this one couldn't start.");
-            const body = {
-              engine: engine.id,
-              look: look.id,
-              scene: sScene,
-              videoUrl,
-              frameUrl: frameUrls[fid] ?? undefined,
-              sphereUrl,
-              variant: job.take ?? 0,
-              srcUrl,
-              secs: sSecs,
-              width: c.width,
-              height: c.height,
-              final: sFinal,
-            };
-            patchJob(job.id, { request: { path: "/api/video/start", body }, note: "Submitting…" });
-            const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/start", body);
-            track(job.id, r.statusUrl, r.responseUrl);
-          } catch (e) {
-            patchJob(job.id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
-          }
-        })
+        newJobs.filter((j) => !heldIds.has(j.id)).map((job) => startOne(job, ctx, frameUrls[`${job.look}|${job.take ?? 0}`] ?? null))
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
@@ -610,6 +701,10 @@ export default function VideoPage() {
           ))}
         </div>
         <label className="mt-3 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={approveFirst} onChange={(e) => setApproveFirst(e.target.checked)} />
+          <span>Approve the still before making the video (recommended, saves money if the still is wrong)</span>
+        </label>
+        <label className="mt-2 flex items-center gap-2 text-sm">
           <input type="checkbox" checked={final} onChange={(e) => setFinal(e.target.checked)} />
           <span>Final quality (1080p on Seedance and MiniMax, costs more)</span>
         </label>
@@ -650,10 +745,66 @@ export default function VideoPage() {
         >
           {`Generate ${pairs.length * takes} clip${pairs.length * takes === 1 ? "" : "s"}`}
         </button>
-        <span className="text-sm text-neutral-500">Estimated {money(cost)} USD in total (includes relit first frames). Rough, from fal's list prices.</span>
+        <span className="text-sm text-neutral-500">{approveFirst && stillsCost > 0
+            ? `Charged now: about ${money(stillsCost)} for the stills. Videos (about ${money(cost - stillsCost)}) are only charged when you approve them. Rough, from fal's list prices.`
+            : `Estimated ${money(cost)} USD in total (includes relit first frames). Rough, from fal's list prices.`}</span>
         <span className="text-xs text-neutral-400">Generating starts in the background: load your next clip straight away.</span>
       </div>
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+
+      {/* Approve the still */}
+      {pending.length > 0 && (
+        <section className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <h2 className="mb-1 text-sm font-semibold">Approve the still</h2>
+          <p className="mb-3 text-xs text-neutral-600">Check each still. Happy with it? Click Create video. Not right? Type what to change and redo just the still (about {money(FRAME_COST_USD)}), no video is charged until you approve.</p>
+          <div className="flex flex-wrap gap-4">
+            {pending.flatMap((b) =>
+              b.items.map((it) => {
+                const tk = `${b.id}|${it.key}`;
+                const lookLabel = LOOKS.find((l) => l.id === it.look)?.label;
+                return (
+                  <div key={tk} className="w-72 rounded-lg border border-neutral-200 bg-white p-2">
+                    <p className="mb-1 text-xs font-medium">{lookLabel} <span className="font-normal text-neutral-400">· take {it.take + 1} · {b.name}</span></p>
+                    {it.busy ? (
+                      <p className="py-10 text-center text-xs text-neutral-500">Making a new still…</p>
+                    ) : it.frameUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.frameUrl} alt="Relit still" className="w-full rounded" />
+                    ) : (
+                      <p className="py-6 text-center text-xs text-red-600">The still failed. Redo it below.</p>
+                    )}
+                    {it.error && <p className="mt-1 text-xs text-red-600">{it.error}</p>}
+                    <textarea
+                      value={stillText[tk] ?? ""}
+                      onChange={(e) => setStillText((m) => ({ ...m, [tk]: e.target.value }))}
+                      rows={2}
+                      placeholder="What should change? e.g. more sun, lower the water a bit, less orange"
+                      className="mt-2 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        onClick={() => approveStill(b, it)}
+                        disabled={it.busy || !it.frameUrl}
+                        className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+                      >
+                        Create video
+                      </button>
+                      <button
+                        onClick={() => void redoStill(b, it, stillText[tk] ?? "")}
+                        disabled={it.busy || (!!it.frameUrl && !(stillText[tk] ?? "").trim())}
+                        className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                      >
+                        Redo still
+                      </button>
+                      <button onClick={() => discardStill(b, it)} className="px-1 text-xs text-neutral-500 underline">Discard</button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Relit frames */}
       {Object.keys(frames).length > 0 && (
