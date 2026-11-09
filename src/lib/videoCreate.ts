@@ -214,7 +214,7 @@ export function buildCreatePayload(engine: CreateEngine, input: CreateInput): Re
         duration: String(secs),
         generate_audio: input.audio,
       };
-      if (urls.length > 1) payload.elements = urls.slice(1).map((u) => ({ frontal_image_url: u }));
+      if (urls.length > 1) payload.elements = urls.slice(1).map((u) => ({ frontal_image_url: u, reference_image_urls: [u] })); // fal rejects an element with only a frontal image
       return payload;
     }
     case "v4": {
