@@ -109,7 +109,7 @@ export const LOOKS: Look[] = [
     night: false,
     blurb: "Raise the tide to a natural high, sunny, natural blue water",
     video:
-      "a sunny day at a natural HIGH TIDE with natural deep blue water. First study the water: judge the current tide level from the visible waterline, exposed sand, mud, rocks, pilings and the jetty. Then raise the water to a natural high tide, filling the canal, river or bay up to near the top of the beach or bank at the foot of the property, just below the top edge of the sand, grass or retaining wall, covering the exposed sand, mud, rocks and lower pilings. It must be a normal full high tide, never a king tide or flood: no water over lawns, paths, seawalls, jetty decks or into the property. If the water is already at a natural high tide, leave the level as it is. The water surface is calm with soft natural ripples and believable reflections, and boats and pontoons sit naturally at the new level. If the sky is cloudy or dull make it a clean sunny day with a bright blue sky and at most a few soft white clouds and crisp natural daylight. Change the colour of the water to a natural, slightly dark Gold Coast waterway blue: a deep, rich, clean blue with only a hint of teal, realistic for an Australian canal or river in sunshine, never bright turquoise, never Bahamas or tropical-postcard, never neon, never brown or muddy. Everything else, the buildings, land, fences, jetties, boats, trees and camera framing, stays exactly as it is",
+      "a sunny day at a natural HIGH TIDE with natural deep blue water. Judge the current tide from the waterline, exposed sand, mud, rocks, pilings and jetty, then raise the water to a natural full high tide, filling the canal, river or bay to near the top of the beach or bank at the foot of the property, just below the top edge of the sand, grass or wall, covering exposed sand, mud, rocks and lower pilings. Never a king tide or flood: no water over lawns, paths, seawalls, jetty decks or into the property. If already at high tide, keep the level. Calm surface, natural reflections, boats sit naturally at the new level. If the sky is cloudy make it a clean sunny day with blue sky and crisp daylight. Make the water a natural, slightly dark Gold Coast waterway blue with a hint of teal, never bright turquoise, never Bahamas, neon, brown or muddy. Everything else stays exactly as it is",
     sphere: { dir: [0.25, 0.8, 0.55], key: [255, 247, 232], ambient: [120, 150, 200], softness: 0.35 },
   },
   {
@@ -186,6 +186,10 @@ export function getLook(id: string): Look | undefined {
 export const HARD_RULES =
   "HARD RULES, never break them: (1) Do not add, invent, extend or duplicate ANY building, tower, structure, land, headland, mountain, boat, person, vehicle or object, especially at or near the horizon and in the distance. First scan the whole frame and note exactly what is there: whatever is open sea, sky or empty ground must stay open sea, sky or empty ground, and nothing new may appear in front of or behind the existing view. (2) Do not change, replace or restyle anything that exists: balustrades, glass, railings, furniture, finishes, colours, shapes and proportions stay exactly as in the source (a glass balustrade stays the same glass balustrade). (3) The camera position, direction, angle, perspective, framing, crop and camera movement stay identical to the source for the whole clip, with no re-framing, no turning, no extra movement. The ONLY exception to these rules is a change that the requested look explicitly asks for (for example the water level and water colour for a high tide look); change nothing else.";
 
+/** Compact version for engines with a 2500-character prompt limit (Seedance). */
+export const HARD_RULES_SHORT =
+  "HARD RULES: do not add, invent or extend any building, structure, land, boat, person or object, especially near the horizon; open sea, sky and empty ground stay empty. Do not change or restyle anything that exists. Keep the camera position, angle, framing and movement identical. The only exception is a change the requested look explicitly asks for.";
+
 export function framePrompt(look: Look, scene?: Scene, extra?: string): string {
   const strength =
     look.group === "cinematic"
@@ -198,7 +202,7 @@ Relight the whole scene as ${look.video}. ${strength}${sceneLine(scene)}${extra 
 
 /** Prompt for Seedance's video edit. @Video1 is the clip, @Image1 the relit first frame. */
 export function seedancePrompt(look: Look, scene?: Scene, extra?: string): string {
-  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people. ${HARD_RULES}`;
+  return `Strictly edit @Video1. Keep every object, the architecture, the camera movement, framing, composition and all motion exactly as in @Video1. Change ONLY the lighting, sky and time of day to ${look.video}.${sceneLine(scene)}${extra ? " " + extra : ""} Use @Image1 as the exact look of the opening frame and keep that same lighting consistent for the whole clip with no flicker. Real photographic lighting, never stylised or over-saturated. Photorealistic, stable architecture, no new objects, no added people. ${HARD_RULES_SHORT}`;
 }
 
 /** Short prompt for engines that take a relit first frame (ID-V2V). */
