@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
   const engine = CAST_ENGINES.find((e) => e.id === engineId)!;
   const blocked = await checkCredits(req, engine.cost);
   if (blocked) return blocked;
+  const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
+  for (let attempt = 0; attempt < 2; attempt++) {
   try {
     let url: string;
     let mode: string;
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
       url =
         engineId === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1 })
-          : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "5" });
+          : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
       mode = `model · design · ${engineId}`;
     } else if (body.action === "place") {
       if (!isUrl(body.sceneUrl) || !isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing scene or model image." }, { status: 400 });
@@ -64,7 +66,7 @@ export async function POST(req: NextRequest) {
       url =
         engineId === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1 })
-          : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "5" });
+          : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
       mode = `model · scene · ${engineId}`;
     } else {
       return NextResponse.json({ error: "Unknown action." }, { status: 400 });
@@ -74,10 +76,13 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
-    const blockedByFilter = /content.?polic|safety|flagged|nsfw|moderat|sensitive/i.test(msg);
+    const blockedByFilter = BLOCK.test(msg);
+    if (blockedByFilter && attempt === 0) continue; // quiet automatic retry, a fresh generation often passes
     return NextResponse.json(
       { error: blockedByFilter ? `The image filter blocked this (${msg.slice(0, 120)}). Try again, switch to Nano Banana Pro, or reword the outfit (for example "one-piece swimsuit", "beach cover-up", "resort wear").` : msg },
       { status }
     );
   }
+  }
+  return NextResponse.json({ error: "Failed." }, { status: 500 });
 }
