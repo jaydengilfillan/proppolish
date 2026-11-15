@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       imageUrls: [body.image],
       resolution: "2K",
       aspectRatio: nearestFalAspectRatio(width, height),
+      safetyTolerance: "5", // people in swimwear on beach shots are normal; avoid false blocks, explicit content is still filtered
     });
     await chargeCredits(req, FRAME_COST_USD, `${look.id} · first frame`, "fal", url);
     return NextResponse.json({ url });
