@@ -37,6 +37,10 @@ export function designPrompt(spec: ModelSpec, variant: number): string {
   return `Photorealistic full-length photograph of one ${spec.age} ${spec.gender} model with ${spec.hairColour} ${spec.hairStyle} hair, ${spec.build} build, wearing a stylish ${spec.outfit} outfit. ${spec.extra ? "Extra detail: " + spec.extra.slice(0, 400) + ". " : ""}${ALWAYS} Standing relaxed, facing the camera, full body from head to toe in frame with space around them, on a plain light neutral studio background, soft even flattering light, sharp focus, natural skin texture, natural proportions, shot on a professional camera. No text, no logos, no other people.${v}`;
 }
 
+export function tweakModelPrompt(change: string): string {
+  return `Edit this photo of the model. Keep the exact same person: identical face, age, skin tone and body, recognisably the same individual, same full-length pose, framing and plain light studio background. Apply only this change: ${change.slice(0, 300)}. ${ALWAYS} Photorealistic, sharp, natural, no text.`;
+}
+
 export function placePrompt(outfit: string, action: string, tweak?: string): string {
   return `Image 1 is the scene and image 2 is the model. Place the exact same person from image 2 into the scene from image 1: identical face, hair, age and body, recognisably the same person. ${action ? "They are " + action.slice(0, 300) + ". " : ""}${outfit ? "They are wearing " + outfit.slice(0, 300) + ", styled stylishly and flattering. " : "Keep a stylish, flattering outfit. "}${ALWAYS} Match the scene's lighting, colour, perspective, scale, shadows and reflections so they look truly photographed there, with natural contact with the ground and any objects. Do not change the scene itself: keep the architecture, objects, camera angle, framing and crop exactly as in image 1, and add only this one person. Photorealistic, sharp, no text.${tweak ? " Adjustment requested, apply it clearly: " + tweak.slice(0, 300) + "." : ""}`;
 }
