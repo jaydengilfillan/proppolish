@@ -161,6 +161,15 @@ export default function CastPage() {
   const [makeVideo, setMakeVideo] = useState(true);
   const [vidEngine, setVidEngine] = useState("seedance15");
   const [vidSecs, setVidSecs] = useState(5);
+  const [bkUrl, setBkUrl] = useState("");
+  const [bkPreview, setBkPreview] = useState("");
+  const [bkPrompt, setBkPrompt] = useState("Natural, subtle, realistic motion, gentle smooth camera movement.");
+  const [bkEngine, setBkEngine] = useState("wan22");
+  const [bkSecs, setBkSecs] = useState(5);
+  const [bkAspect, setBkAspect] = useState("9:16");
+  const [bkBusy, setBkBusy] = useState(false);
+  const [bkError, setBkError] = useState("");
+  const [bkJobs, setBkJobs] = useState<string[]>([]);
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
   const [looks, setLooks] = useState<string[]>([]);
@@ -330,7 +339,7 @@ export default function CastPage() {
   /** If a scene video is refused by a content filter, quietly retry it on the next engine (no re-typing). */
   const retriedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const CHAIN = ["seedance15", "kling3pro", "kling3std", "seedance_i2v"];
+    const CHAIN = ["seedance15", "kling3pro", "kling3std", "seedance_i2v", "wan22", "minimaxh3"];
     for (const r of rows) {
       if (!r.videoJobId || !r.result) continue;
       const j = jobs.find((x) => x.id === r.videoJobId);
@@ -343,6 +352,39 @@ export default function CastPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, rows]);
+
+  async function pickBackup(file: File | undefined) {
+    if (!file) return;
+    setBkBusy(true);
+    setBkError("");
+    try {
+      const sc = await sceneFromFile(file);
+      setBkUrl(await uploadToFal(sc.blob, `backup-${Date.now()}.jpg`));
+      setBkPreview(sc.preview);
+      setBkAspect(sc.w / sc.h > 1.2 ? "16:9" : sc.w / sc.h < 0.83 ? "9:16" : "1:1");
+    } catch (e) {
+      setBkError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBkBusy(false);
+    }
+  }
+
+  /** Backup video: any still, any prompt, straight to a backup engine. */
+  async function startBackup() {
+    if (!bkUrl || !bkPrompt.trim()) return;
+    const eng = CREATE_ENGINES.find((e) => e.id === bkEngine) ?? CREATE_ENGINES[0];
+    const body = { engine: eng.id, prompt: bkPrompt.trim(), refs: [{ url: bkUrl, label: "the opening frame" }], startFromFirst: true, secs: bkSecs, aspect: bkAspect, audio: false, final: false };
+    const id = `${Date.now()}-backup-${Math.random().toString(36).slice(2, 6)}`;
+    const job: Job = { id, kind: "create", engine: eng.id, title: `Backup: ${bkPrompt.trim().slice(0, 60)}`, status: "waiting", createdAt: Date.now(), params: { prompt: bkPrompt.trim(), refs: body.refs, startFromFirst: true, secs: bkSecs, aspect: bkAspect, audio: false, final: false }, retriesLeft: 0, attempts: 1, request: { path: "/api/video/create", body } };
+    addJobs([job]);
+    setBkJobs((j) => [id, ...j]);
+    try {
+      const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
+      track(id, r.statusUrl, r.responseUrl);
+    } catch (e) {
+      patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
 
   /** Turn the finished still (model already in the scene) straight into a video, in the background. */
   async function startVideo(row: SceneRow, stillUrl: string, engineOverride?: string) {
@@ -695,6 +737,67 @@ export default function CastPage() {
           <button onClick={() => setRows((r) => [...r, { id: `r${Date.now()}`, outfit: "", action: "", tweak: "", tweakAll: "", busy: false }])} className="mt-3 rounded border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-50">+ Add another scene</button>
         )}
         <p className="mt-3 text-xs text-neutral-400">Videos also appear in the Video tab under Create, where you can edit them.</p>
+      </section>
+
+      {/* Backup video */}
+      <section className="mb-6 rounded-xl border border-dashed border-neutral-300 bg-white p-4">
+        <h2 className="text-sm font-semibold">Backup video (only when the normal engines refuse)</h2>
+        <p className="mb-3 text-xs text-neutral-500">Pick any still and send it straight to a different engine. Wan is an open model with its input and output safety checks switched off in the request. MiniMax is a separate provider with its checker off. Neither is guaranteed to accept every image, and fal can still enforce its own checks.</p>
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="w-40">
+            <input type="file" accept="image/*,video/*" onChange={(e) => void pickBackup(e.target.files?.[0])} className="w-full text-xs" />
+            {rows.some((r) => r.result) && (
+              <select onChange={(e) => { if (e.target.value) { setBkUrl(e.target.value); setBkPreview(e.target.value); } }} className="mt-2 w-full rounded border border-neutral-300 px-1 py-1 text-xs" defaultValue="">
+                <option value="">or use a finished still…</option>
+                {rows.filter((r) => r.result).map((r, i) => (
+                  <option key={r.id} value={r.result}>{`Scene still ${i + 1}`}</option>
+                ))}
+              </select>
+            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {bkPreview && <img src={bkPreview} alt="Backup still" className="mt-2 w-full rounded" />}
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <textarea value={bkPrompt} onChange={(e) => setBkPrompt(e.target.value)} rows={2} className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" placeholder="What should move?" />
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <select value={bkEngine} onChange={(e) => setBkEngine(e.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+                {CREATE_ENGINES.filter((e) => ["wan22", "minimaxh3", "seedance15", "kling3pro"].includes(e.id)).map((e) => (
+                  <option key={e.id} value={e.id}>{e.label} (about ${estimateCreateUsd(e, bkSecs, false, false).toFixed(2)})</option>
+                ))}
+              </select>
+              <select value={bkSecs} onChange={(e) => setBkSecs(Number(e.target.value))} className="rounded border border-neutral-300 px-2 py-1">
+                {[3, 5, 8, 10].map((n) => (<option key={n} value={n}>{n} seconds</option>))}
+              </select>
+              <select value={bkAspect} onChange={(e) => setBkAspect(e.target.value)} className="rounded border border-neutral-300 px-2 py-1">
+                {["16:9", "9:16", "1:1"].map((a) => (<option key={a} value={a}>{a}</option>))}
+              </select>
+              <button onClick={() => void startBackup()} disabled={!bkUrl || bkBusy || !bkPrompt.trim()} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">Make backup video</button>
+            </div>
+            {bkError && <p className="text-xs text-red-600">{bkError}</p>}
+          </div>
+        </div>
+        {bkJobs.length > 0 && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {bkJobs.map((id) => {
+              const j = jobs.find((x) => x.id === id);
+              if (!j) return null;
+              return (
+                <div key={id} className="rounded-lg border border-neutral-200 p-2">
+                  {j.status === "done" && j.videoUrl ? (
+                    <>
+                      <video src={j.videoUrl} controls loop muted className="w-full rounded bg-black" />
+                      <a href={j.videoUrl} download target="_blank" rel="noreferrer" className="mt-2 inline-block rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">Download video</a>
+                    </>
+                  ) : j.status === "failed" ? (
+                    <p className="text-xs text-red-600">{j.error}</p>
+                  ) : (
+                    <p className="py-6 text-center text-xs text-neutral-500">{j.note ?? "Making the video… (usually 1-6 minutes)"}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </main>
   );
