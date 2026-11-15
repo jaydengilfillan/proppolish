@@ -127,6 +127,7 @@ export async function POST(req: NextRequest) {
         outfit: str(s.outfit, 300),
         extra: str(s.extra, 400),
         plainBase: s.plainBase !== false,
+        activity: str(s.activity, 200),
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
