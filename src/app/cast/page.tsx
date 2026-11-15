@@ -17,24 +17,6 @@ interface SavedModel {
   width?: number;
   height?: number;
 }
-interface SceneRow {
-  id: string;
-  file?: File;
-  preview?: string;
-  sceneUrl?: string;
-  width?: number;
-  height?: number;
-  outfit: string;
-  action: string;
-  tweak: string;
-  tweakAll: string;
-  result?: string;
-  videoJobId?: string;
-  videoTried?: string[];
-  busy: boolean;
-  error?: string;
-}
-
 async function api<T>(path: string, body: unknown): Promise<T> {
   const resp = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const text = await resp.text();
@@ -116,6 +98,16 @@ async function sceneFromFile(file: File): Promise<{ blob: Blob; w: number; h: nu
   }
 }
 
+async function downloadFile(url: string, name: string) {
+  try {
+    const o = URL.createObjectURL(await urlToBlob(url));
+    triggerDownload(o, name);
+    setTimeout(() => URL.revokeObjectURL(o), 5000);
+  } catch {
+    window.open(url, "_blank");
+  }
+}
+
 const money = (n: number) => `$${n.toFixed(2)}`;
 const OUTFIT_CHIPS = ["a stylish summer dress", "a classic bikini", "a bikini with a sarong", "a one-piece swimsuit", "a tailored business suit", "smart casual shirt and chinos", "elegant evening wear", "activewear"];
 const STORE_KEY = "cast-models-v1";
@@ -153,14 +145,9 @@ export default function CastPage() {
   const [opts, setOpts] = useState<{ url?: string; busy: boolean; error?: string; change?: string }[]>([]);
     const [saved, setSaved] = useState<SavedModel[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [rows, setRows] = useState<SceneRow[]>([{ id: "r1", outfit: "", action: "", tweak: "", tweakAll: "", busy: false }]);
   const [placeEngine, setPlaceEngine] = useState<CastEngine>("seedream");
-  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const addRef = useRef<HTMLInputElement | null>(null);
   const { jobs, addJobs, track, patchJob } = useVideoStore();
-  const [makeVideo, setMakeVideo] = useState(true);
-  const [vidEngine, setVidEngine] = useState("seedance15");
-  const [vidSecs, setVidSecs] = useState(5);
   const [bkUrl, setBkUrl] = useState("");
   const [bkPreview, setBkPreview] = useState("");
   const [bkPrompt, setBkPrompt] = useState("Natural, subtle, realistic motion, gentle smooth camera movement.");
@@ -201,7 +188,6 @@ export default function CastPage() {
   };
 
   const eng = CAST_ENGINES.find((e) => e.id === engine)!;
-  const placeEng = CAST_ENGINES.find((e) => e.id === placeEngine)!;
   const active = saved.find((m) => m.id === activeId) ?? null;
 
   async function generateOptions() {
@@ -301,62 +287,6 @@ export default function CastPage() {
     await Promise.all(list.map((l, i) => runLook(i, l)));
   }
 
-  const patchRow = (id: string, p: Partial<SceneRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...p } : x)));
-
-  async function pickScene(id: string, file: File | undefined) {
-    if (!file) return;
-    patchRow(id, { busy: true, error: undefined });
-    try {
-      const s = await sceneFromFile(file);
-      const sceneUrl = await uploadToFal(s.blob, `scene-${Date.now()}.jpg`);
-      patchRow(id, { file, preview: s.preview, sceneUrl, width: s.w, height: s.h, busy: false });
-    } catch (e) {
-      patchRow(id, { busy: false, error: e instanceof Error ? e.message : "Upload failed" });
-    }
-  }
-
-  async function place(row: SceneRow, tweak?: string, softer = false) {
-    if (!active || !row.sceneUrl) return;
-    const t = [row.tweakAll, tweak].filter(Boolean).join(". ");
-    patchRow(row.id, { busy: true, error: undefined, tweak: "", tweakAll: t });
-    try {
-      const r = await api<{ url: string }>("/api/cast", {
-        action: "place",
-        softer,
-        age: active.summary,
-        engine: placeEngine,
-        sceneUrl: row.sceneUrl,
-        modelUrl: active.url,
-        outfit: row.outfit,
-        actionText: row.action,
-        tweak: t,
-        width: row.width,
-        height: row.height,
-      });
-      patchRow(row.id, { busy: false, result: r.url });
-      if (makeVideo) void startVideo(row, r.url);
-    } catch (e) {
-      patchRow(row.id, { busy: false, error: e instanceof Error ? e.message : "Failed" });
-    }
-  }
-
-  /** If a scene video is refused by a content filter, quietly retry it on the next engine (no re-typing). */
-  const retriedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const CHAIN = ["seedance15", "kling3pro", "kling3std", "seedance_i2v", "wan22", "minimaxh3"];
-    for (const r of rows) {
-      if (!r.videoJobId || !r.result) continue;
-      const j = jobs.find((x) => x.id === r.videoJobId);
-      if (!j || j.status !== "failed" || retriedRef.current.has(j.id)) continue;
-      if (!/content|policy|likeness|safety|moderat|flagged|blocked|partner/i.test(j.error ?? "")) continue;
-      const tried = r.videoTried ?? [];
-      const next = CHAIN.find((c) => !tried.includes(c));
-      retriedRef.current.add(j.id);
-      if (next) void startVideo(r, r.result, next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobs, rows]);
-
   async function pickBackup(file: File | undefined) {
     if (!file) return;
     setBkBusy(true);
@@ -402,49 +332,6 @@ export default function CastPage() {
       track(id, r2.statusUrl, r2.responseUrl);
     } catch (e) {
       patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
-    }
-  }
-
-  /** Turn the finished still (model already in the scene) straight into a video, in the background. */
-  async function startVideo(row: SceneRow, stillUrl: string, engineOverride?: string) {
-    const eng = CREATE_ENGINES.find((e) => e.id === (engineOverride ?? vidEngine)) ?? CREATE_ENGINES[0];
-    const ratio = row.width && row.height ? row.width / row.height : 1.78;
-    const aspect = ratio > 1.2 ? "16:9" : ratio < 0.83 ? "9:16" : "1:1";
-    const prompt = `${row.action ? "The person is " + row.action.slice(0, 300) + ". " : ""}Natural, subtle, realistic motion: the person moves naturally and confidently in the scene with believable body movement, gentle smooth cinematic camera movement. Keep the person's face, hair, outfit and the whole scene exactly consistent with the opening frame. Photorealistic, no text.`;
-    const body = { engine: eng.id, prompt, refs: [{ url: stillUrl, label: "the opening frame" }], startFromFirst: true, secs: vidSecs, aspect, audio: false, final: false };
-    const id = `${Date.now()}-cast-${Math.random().toString(36).slice(2, 6)}`;
-    const job: Job = {
-      id,
-      kind: "create",
-      engine: eng.id,
-      title: `Model scene: ${(row.action || row.outfit || "scene").slice(0, 60)}`,
-      status: "waiting",
-      createdAt: Date.now(),
-      params: { prompt, refs: body.refs, startFromFirst: true, secs: vidSecs, aspect, audio: false, final: false },
-      retriesLeft: 0,
-      attempts: 1,
-      request: { path: "/api/video/create", body },
-    };
-    addJobs([job]);
-    patchRow(row.id, { videoJobId: id, videoTried: [...(engineOverride ? row.videoTried ?? [] : []), eng.id] });
-    try {
-      const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
-      track(id, r.statusUrl, r.responseUrl);
-    } catch (e) {
-      patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
-    }
-  }
-
-  /** Edit the finished image itself (e.g. "add a sarong"): quick, keeps the person and scene. */
-  async function editResult(row: SceneRow, text: string) {
-    const t = text.trim();
-    if (!row.result || !t) return;
-    patchRow(row.id, { busy: true, error: undefined, tweak: "" });
-    try {
-      const r = await api<{ url: string }>("/api/cast", { action: "editscene", age: active?.summary, engine: placeEngine, imageUrl: row.result, change: t, width: row.width, height: row.height });
-      patchRow(row.id, { busy: false, result: r.url });
-    } catch (e) {
-      patchRow(row.id, { busy: false, error: e instanceof Error ? e.message : "Failed" });
     }
   }
 
@@ -640,123 +527,7 @@ export default function CastPage() {
         </section>
       )}
 
-      {/* 2. Scenes */}
-      <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">2. Put {active ? active.name : "your model"} into scenes</h2>
-          <div className="flex overflow-hidden rounded border border-neutral-300 text-sm">
-            {CAST_ENGINES.map((e) => (
-              <button key={e.id} onClick={() => setPlaceEngine(e.id)} className={`px-3 py-1 ${placeEngine === e.id ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>
-                {e.label} <span className="text-xs opacity-70">{money(e.cost)}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-        {!active && <p className="mb-3 text-xs text-amber-700">Choose a model first.</p>}
-        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-neutral-50 p-3 text-xs">
-          <label className="flex items-center gap-2 font-medium">
-            <input type="checkbox" checked={makeVideo} onChange={(e) => setMakeVideo(e.target.checked)} />
-            Make the video straight after (no second step)
-          </label>
-          <select value={vidEngine} onChange={(e) => setVidEngine(e.target.value)} disabled={!makeVideo} className="rounded border border-neutral-300 px-2 py-1">
-            {CREATE_ENGINES.map((e) => (
-              <option key={e.id} value={e.id}>{e.label} (about ${estimateCreateUsd(e, vidSecs, false, false).toFixed(2)})</option>
-            ))}
-          </select>
-          <select value={vidSecs} onChange={(e) => setVidSecs(Number(e.target.value))} disabled={!makeVideo} className="rounded border border-neutral-300 px-2 py-1">
-            {[3, 5, 8, 10, 15].map((n) => (
-              <option key={n} value={n}>{n} seconds</option>
-            ))}
-          </select>
-          <span className="text-neutral-400">Upload a still or a video. For a video the model is placed into its first frame and the video is made from that. Scenes run side by side.</span>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {rows.map((r) => (
-            <div key={r.id} className="rounded-lg border border-neutral-200 p-3">
-              <div className="flex gap-3">
-                <div className="w-40 shrink-0">
-                  {r.preview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.preview} alt="Scene" className="w-full rounded" />
-                  ) : (
-                    <div className="flex h-24 items-center justify-center rounded bg-neutral-100 text-xs text-neutral-400">No scene yet</div>
-                  )}
-                  <button onClick={() => fileRefs.current[r.id]?.click()} className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
-                    {r.preview ? "Change scene" : "Choose photo or clip"}
-                  </button>
-                  <input ref={(el) => { fileRefs.current[r.id] = el; }} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => void pickScene(r.id, e.target.files?.[0])} />
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <input value={r.action} onChange={(e) => patchRow(r.id, { action: e.target.value })} placeholder="What are they doing? e.g. walking in through the front door" className="rounded border border-neutral-300 px-2 py-1.5 text-xs" />
-                  <input value={r.outfit} onChange={(e) => patchRow(r.id, { outfit: e.target.value })} placeholder="Leave BLANK to keep the model's exact outfit, or type a different one" className="rounded border border-neutral-300 px-2 py-1.5 text-xs" />
-                  <div className="flex flex-wrap gap-1">
-                    {OUTFIT_CHIPS.map((c) => (
-                      <button key={c} onClick={() => patchRow(r.id, { outfit: c })} className="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-600 hover:border-neutral-500">{c}</button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <button onClick={() => void place(r)} disabled={!active || !r.sceneUrl || r.busy} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">
-                  {r.busy ? "Working…" : makeVideo ? `Place model + make video (${money(placeEng.cost)} + video)` : `Place model (${money(placeEng.cost)})`}
-                </button>
-                {rows.length > 1 && <button onClick={() => setRows((x) => x.filter((y) => y.id !== r.id))} className="text-xs text-neutral-400 underline">Remove</button>}
-              </div>
-              {r.error && (
-                <div className="mt-2">
-                  <p className="text-xs text-red-600">{r.error}</p>
-                  <button
-                    onClick={async () => {
-                      const u = { ...r, outfit: await reword(r.outfit), action: await reword(r.action), tweakAll: await reword(r.tweakAll) };
-                      patchRow(r.id, { outfit: u.outfit, action: u.action, tweakAll: u.tweakAll });
-                      void place(u, undefined, true);
-                    }}
-                    className="mt-1 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white"
-                  >
-                    Reword subtly and retry
-                  </button>
-                  <span className="ml-2 text-xs text-neutral-400">Your text is rewritten in subtler wording with the same meaning (shown above) and run again.</span>
-                </div>
-              )}
-              {r.result && (
-                <div className="mt-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={r.result} alt="Result" className="w-full rounded" />
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button onClick={() => void download(r.result!, `model-scene-${r.id}.png`)} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">Download</button>
-                    <input value={r.tweak} onChange={(e) => patchRow(r.id, { tweak: e.target.value })} placeholder="Edit this image, e.g. add a sarong, make the dress red" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs" />
-                    <button onClick={() => void editResult(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40">Edit this ({money(placeEng.cost)})</button>
-                    <button onClick={() => void place(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-40">Redo from scratch</button>
-                    <button onClick={() => void startVideo(r, r.result!)} className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Make video from this image</button>
-                  </div>
-                  {(() => {
-                    const j = r.videoJobId ? jobs.find((x) => x.id === r.videoJobId) : undefined;
-                    if (!j) return null;
-                    return (
-                      <div className="mt-3 rounded-lg border border-neutral-200 p-2">
-                        {j.status === "done" && j.videoUrl ? (
-                          <>
-                            <video src={j.videoUrl} controls loop muted className="w-full rounded bg-black" />
-                            <a href={j.videoUrl} download target="_blank" rel="noreferrer" className="mt-2 inline-block rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">Download video</a>
-                          </>
-                        ) : j.status === "failed" ? (
-                          <p className="text-xs text-red-600">{j.error}</p>
-                        ) : (
-                          <p className="py-6 text-center text-xs text-neutral-500">{j.note ?? (j.status === "queued" ? "Video queued…" : j.status === "running" ? "Making the video… (usually 2-6 minutes, you can keep working)" : "Starting the video…")}</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        {rows.length < 6 && (
-          <button onClick={() => setRows((r) => [...r, { id: `r${Date.now()}`, outfit: "", action: "", tweak: "", tweakAll: "", busy: false }])} className="mt-3 rounded border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-50">+ Add another scene</button>
-        )}
-        <p className="mt-3 text-xs text-neutral-400">Videos also appear in the Video tab under Create, where you can edit them.</p>
-      </section>
+      <Workbench saved={saved} activeId={activeId} setActiveId={setActiveId} />
 
       {/* Backup video */}
       <section className="mb-6 rounded-xl border border-dashed border-neutral-300 bg-white p-4">
@@ -765,14 +536,6 @@ export default function CastPage() {
         <div className="flex flex-wrap items-start gap-4">
           <div className="w-40">
             <input type="file" accept="image/*,video/*" onChange={(e) => void pickBackup(e.target.files?.[0])} className="w-full text-xs" />
-            {rows.some((r) => r.result) && (
-              <select onChange={(e) => { if (e.target.value) { setBkUrl(e.target.value); setBkPreview(e.target.value); setBkHasModel(true); } }} className="mt-2 w-full rounded border border-neutral-300 px-1 py-1 text-xs" defaultValue="">
-                <option value="">or use a finished still…</option>
-                {rows.filter((r) => r.result).map((r, i) => (
-                  <option key={r.id} value={r.result}>{`Scene still ${i + 1}`}</option>
-                ))}
-              </select>
-            )}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {bkPreview && <img src={bkPreview} alt="Backup still" className="mt-2 w-full rounded" />}
           </div>
@@ -826,5 +589,298 @@ export default function CastPage() {
         )}
       </section>
     </main>
+  );
+}
+
+
+interface Scene { id: string; preview: string; url?: string; w: number; h: number; error?: string }
+interface Gen {
+  id: string; sceneId: string; scenePreview: string; sceneUrl: string; w: number; h: number;
+  modelName: string; modelUrl: string; modelPreview: string; age: string;
+  outfit: string; action: string; engine: CastEngine; makeVideo: boolean; vidEngine: string; secs: number;
+  status: "placing" | "done" | "error"; still?: string; error?: string; jobId?: string; tried: string[]; edit: string; editing?: boolean;
+}
+
+/** Workbench: pick scenes and models, set what you want, and click Generate as often as you like. Every click starts new runs in the background. */
+function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; activeId: string | null; setActiveId: (id: string) => void }) {
+  const { jobs, addJobs, track, patchJob } = useVideoStore();
+  const [scenes, setScenes] = useState<Scene[]>([]);
+  const [selScenes, setSelScenes] = useState<string[]>([]);
+  const [selModels, setSelModels] = useState<string[]>([]);
+  const [outfit, setOutfit] = useState("");
+  const [action, setAction] = useState("");
+  const [takes, setTakes] = useState(1);
+  const [placeEngine, setPlaceEngine] = useState<CastEngine>("seedream");
+  const [makeVideo, setMakeVideo] = useState(true);
+  const [vidEngine, setVidEngine] = useState("seedance15");
+  const [secs, setSecs] = useState(5);
+  const [gens, setGens] = useState<Gen[]>([]);
+  const [err, setErr] = useState("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const placeEng = CAST_ENGINES.find((e) => e.id === placeEngine)!;
+
+  // keep at least the active model selected
+  useEffect(() => {
+    if (selModels.length === 0 && activeId && saved.some((m) => m.id === activeId)) setSelModels([activeId]);
+  }, [activeId, saved, selModels.length]);
+
+  const patch = (id: string, p: Partial<Gen>) => setGens((g) => g.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  const toggle = (list: string[], v: string) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+
+  async function addScenes(files: FileList | null) {
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      const id = `s${Date.now()}${Math.random().toString(36).slice(2, 5)}`;
+      try {
+        const sc = await sceneFromFile(file);
+        setScenes((l) => [...l, { id, preview: sc.preview, w: sc.w, h: sc.h }]);
+        setSelScenes((l) => [...l, id]);
+        void uploadToFal(sc.blob, `scene-${Date.now()}.jpg`)
+          .then((url) => setScenes((l) => l.map((x) => (x.id === id ? { ...x, url } : x))))
+          .catch((e) => setScenes((l) => l.map((x) => (x.id === id ? { ...x, error: e instanceof Error ? e.message : "Upload failed" } : x))));
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Could not read that file");
+      }
+    }
+  }
+
+  async function startVideo(g: Gen, still: string, engineOverride?: string) {
+    const eng = CREATE_ENGINES.find((e) => e.id === (engineOverride ?? g.vidEngine)) ?? CREATE_ENGINES[0];
+    const ratio = g.w && g.h ? g.w / g.h : 1.78;
+    const aspect = ratio > 1.2 ? "16:9" : ratio < 0.83 ? "9:16" : "1:1";
+    const prompt = `${g.action ? "The person is " + g.action.slice(0, 300) + ". " : ""}Natural, subtle, realistic motion: the person moves naturally and confidently in the scene with believable body movement, gentle smooth cinematic camera movement. Keep the person's face, hair, outfit and the whole scene exactly consistent with the opening frame. Photorealistic, no text.`;
+    const refs = [{ url: still, label: "the opening frame" }];
+    const body = { engine: eng.id, prompt, refs, startFromFirst: true, secs: g.secs, aspect, audio: false, final: false };
+    const id = `${Date.now()}-cast-${Math.random().toString(36).slice(2, 6)}`;
+    const job: Job = { id, kind: "create", engine: eng.id, title: `${g.modelName}: ${(g.action || g.outfit || "scene").slice(0, 60)}`, status: "waiting", createdAt: Date.now(), params: { prompt, refs, startFromFirst: true, secs: g.secs, aspect, audio: false, final: false }, retriesLeft: 0, attempts: 1, request: { path: "/api/video/create", body } };
+    addJobs([job]);
+    setGens((l) => l.map((x) => (x.id === g.id ? { ...x, jobId: id, tried: [...(engineOverride ? x.tried : []), eng.id] } : x)));
+    try {
+      const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
+      track(id, r.statusUrl, r.responseUrl);
+    } catch (e) {
+      patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
+  async function run(g: Gen, over?: { outfit?: string; action?: string; softer?: boolean }) {
+    const o = over?.outfit ?? g.outfit;
+    const a = over?.action ?? g.action;
+    patch(g.id, { status: "placing", error: undefined, outfit: o, action: a, jobId: undefined, still: undefined });
+    try {
+      const r = await api<{ url: string }>("/api/cast", { action: "place", softer: over?.softer === true, age: g.age, engine: g.engine, sceneUrl: g.sceneUrl, modelUrl: g.modelUrl, outfit: o, actionText: a, tweak: "", width: g.w, height: g.h });
+      patch(g.id, { status: "done", still: r.url });
+      if (g.makeVideo) void startVideo({ ...g, outfit: o, action: a }, r.url);
+    } catch (e) {
+      patch(g.id, { status: "error", error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
+  function generate() {
+    setErr("");
+    const sc = scenes.filter((s) => selScenes.includes(s.id) && s.url);
+    const ms = saved.filter((m) => selModels.includes(m.id));
+    if (sc.length === 0) return setErr("Add a scene and wait for it to finish uploading, then tick it.");
+    if (ms.length === 0) return setErr("Tick at least one model.");
+    const made: Gen[] = [];
+    for (const s of sc)
+      for (const m of ms)
+        for (let t = 0; t < takes; t++)
+          made.push({ id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, sceneId: s.id, scenePreview: s.preview, sceneUrl: s.url!, w: s.w, h: s.h, modelName: m.name, modelUrl: m.url, modelPreview: m.url, age: m.summary, outfit, action, engine: placeEngine, makeVideo, vidEngine, secs, status: "placing", tried: [], edit: "" });
+    setGens((l) => [...made, ...l]);
+    made.forEach((g) => void run(g));
+  }
+
+  async function editStill(g: Gen) {
+    const t = g.edit.trim();
+    if (!g.still || !t) return;
+    patch(g.id, { editing: true, edit: "" });
+    try {
+      const r = await api<{ url: string }>("/api/cast", { action: "editscene", age: g.age, engine: g.engine, imageUrl: g.still, change: t, width: g.w, height: g.h });
+      patch(g.id, { editing: false, still: r.url });
+    } catch (e) {
+      patch(g.id, { editing: false, error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
+  /** Use a finished image as a new scene, so a second model can be put into it. */
+  function reuseAsScene(g: Gen) {
+    if (!g.still) return;
+    const id = `s${Date.now()}`;
+    setScenes((l) => [...l, { id, preview: g.still!, url: g.still, w: g.w, h: g.h }]);
+    setSelScenes([id]);
+  }
+
+  /** If a video is refused by a content filter, quietly retry it on the next engine. */
+  const retriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const CHAIN = ["seedance15", "kling3pro", "kling3std", "seedance_i2v", "wan22", "minimaxh3"];
+    for (const g of gens) {
+      if (!g.jobId || !g.still) continue;
+      const j = jobs.find((x) => x.id === g.jobId);
+      if (!j || j.status !== "failed" || retriedRef.current.has(j.id)) continue;
+      if (!/content|policy|likeness|safety|moderat|flagged|blocked|partner/i.test(j.error ?? "")) continue;
+      const next = CHAIN.find((c) => !g.tried.includes(c));
+      retriedRef.current.add(j.id);
+      if (next) void startVideo(g, g.still, next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, gens]);
+
+  const count = selScenes.filter((id) => scenes.find((s) => s.id === id)?.url).length * selModels.length * takes;
+  const perCost = placeEng.cost + (makeVideo ? estimateCreateUsd(CREATE_ENGINES.find((e) => e.id === vidEngine) ?? CREATE_ENGINES[0], secs, false, false) : 0);
+  const running = gens.filter((g) => g.status === "placing" || (g.jobId && jobs.find((j) => j.id === g.jobId && !["done", "failed"].includes(j.status)))).length;
+
+  return (
+    <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">2. Scene workbench</h2>
+        {running > 0 && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{running} running in the background. Keep going.</span>}
+      </div>
+
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">Scenes (tick one or more)</p>
+      <div className="mb-4 flex flex-wrap gap-2">
+        {scenes.map((s) => (
+          <div key={s.id} onClick={() => setSelScenes((l) => toggle(l, s.id))} className={`relative h-24 w-24 cursor-pointer overflow-hidden rounded-lg border-2 ${selScenes.includes(s.id) ? "border-neutral-900" : "border-neutral-200 opacity-70"}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={s.preview} alt="Scene" className="h-full w-full object-cover" />
+            {!s.url && !s.error && <span className="absolute inset-x-0 bottom-0 bg-black/60 text-center text-[10px] text-white">Uploading…</span>}
+            {s.error && <span className="absolute inset-x-0 bottom-0 bg-red-600 text-center text-[10px] text-white">Failed</span>}
+            {selScenes.includes(s.id) && <span className="absolute left-1 top-1 rounded-full bg-neutral-900 px-1.5 text-[10px] text-white">✓</span>}
+            <button onClick={(e) => { e.stopPropagation(); setScenes((l) => l.filter((x) => x.id !== s.id)); setSelScenes((l) => l.filter((x) => x !== s.id)); }} className="absolute right-1 top-1 rounded-full bg-white/90 px-1.5 text-[10px] text-neutral-600">×</button>
+          </div>
+        ))}
+        <button onClick={() => fileRef.current?.click()} className="flex h-24 w-24 flex-col items-center justify-center rounded-lg border-2 border-dashed border-neutral-300 text-xs text-neutral-500 hover:border-neutral-500">
+          <span className="text-xl leading-none">+</span>Add photos or clips
+        </button>
+        <input ref={fileRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { void addScenes(e.target.files); e.target.value = ""; }} />
+      </div>
+
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">Models (tick one or more)</p>
+      {saved.length === 0 ? (
+        <p className="mb-4 text-xs text-neutral-500">Make or add a model above first.</p>
+      ) : (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {saved.map((m) => (
+            <div key={m.id} onClick={() => { setSelModels((l) => toggle(l, m.id)); setActiveId(m.id); }} className={`relative w-20 cursor-pointer overflow-hidden rounded-lg border-2 ${selModels.includes(m.id) ? "border-neutral-900" : "border-neutral-200 opacity-70"}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={m.url} alt={m.name} className="h-24 w-full object-cover object-top" />
+              <p className="truncate px-1 py-0.5 text-center text-[10px]">{m.name}</p>
+              {selModels.includes(m.id) && <span className="absolute left-1 top-1 rounded-full bg-neutral-900 px-1.5 text-[10px] text-white">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input value={action} onChange={(e) => setAction(e.target.value)} placeholder="What are they doing? e.g. running along the beach" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
+        <input value={outfit} onChange={(e) => setOutfit(e.target.value)} placeholder="Outfit: leave BLANK to keep the model's exact outfit" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        {OUTFIT_CHIPS.map((c) => (
+          <button key={c} onClick={() => setOutfit(outfit === c ? "" : c)} className={`rounded-full border px-2 py-0.5 text-[11px] ${outfit === c ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-500"}`}>{c}</button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-neutral-50 p-3 text-xs">
+        <div className="flex overflow-hidden rounded border border-neutral-300">
+          {CAST_ENGINES.map((e) => (
+            <button key={e.id} onClick={() => setPlaceEngine(e.id)} className={`px-2 py-1 ${placeEngine === e.id ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>{e.label}</button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1 font-medium"><input type="checkbox" checked={makeVideo} onChange={(e) => setMakeVideo(e.target.checked)} />Make the video too</label>
+        <select value={vidEngine} onChange={(e) => setVidEngine(e.target.value)} disabled={!makeVideo} className="rounded border border-neutral-300 px-2 py-1">
+          {CREATE_ENGINES.map((e) => (<option key={e.id} value={e.id}>{e.label}</option>))}
+        </select>
+        <select value={secs} onChange={(e) => setSecs(Number(e.target.value))} disabled={!makeVideo} className="rounded border border-neutral-300 px-2 py-1">
+          {[3, 5, 8, 10].map((n) => (<option key={n} value={n}>{n}s</option>))}
+        </select>
+        <span className="flex items-center gap-1">Takes
+          <span className="flex overflow-hidden rounded border border-neutral-300">
+            {[1, 2, 3].map((n) => (<button key={n} onClick={() => setTakes(n)} className={`px-2 py-1 ${takes === n ? "bg-neutral-900 text-white" : "hover:bg-neutral-100"}`}>{n}</button>))}
+          </span>
+        </span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button onClick={generate} className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white">
+          Generate {count > 0 ? `${count} ` : ""}{count === 1 ? "run" : "runs"}
+        </button>
+        <span className="text-xs text-neutral-500">{count > 0 ? `About ${money(perCost * count)}. ` : ""}Never locks: change anything and click again to start more.</span>
+      </div>
+      {err && <p className="mt-2 text-xs text-red-600">{err}</p>}
+
+      {gens.length > 0 && (
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {gens.map((g) => {
+            const j = g.jobId ? jobs.find((x) => x.id === g.jobId) : undefined;
+            return (
+              <div key={g.id} className="rounded-lg border border-neutral-200 p-2">
+                <div className="mb-2 flex items-center gap-2 text-[11px] text-neutral-500">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.scenePreview} alt="" className="h-8 w-8 rounded object-cover" />
+                  <span>+</span>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={g.modelPreview} alt="" className="h-8 w-8 rounded object-cover object-top" />
+                  <span className="min-w-0 flex-1 truncate">{g.modelName}{g.action ? `: ${g.action}` : ""}</span>
+                  <button onClick={() => setGens((l) => l.filter((x) => x.id !== g.id))} className="text-neutral-400 hover:text-red-600">×</button>
+                </div>
+                {g.status === "placing" && <p className="py-16 text-center text-xs text-neutral-500">Placing the model…</p>}
+                {g.status === "error" && (
+                  <div>
+                    <p className="text-xs text-red-600">{g.error}</p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <button onClick={() => void run(g)} className="rounded border border-neutral-300 px-2 py-1 text-xs">Try again</button>
+                      <button onClick={async () => void run(g, { outfit: await reword(g.outfit), action: await reword(g.action), softer: true })} className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword subtly and retry</button>
+                    </div>
+                  </div>
+                )}
+                {g.still && (
+                  <>
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g.still} alt="Result" className="w-full rounded" />
+                      {g.editing && <span className="absolute inset-0 flex items-center justify-center rounded bg-white/70 text-xs">Editing…</span>}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      <button onClick={() => void downloadFile(g.still!, `${g.modelName}-scene.png`)} className="rounded border border-neutral-300 px-2 py-1 text-[11px]">Download</button>
+                      <button onClick={() => void run(g)} className="rounded border border-neutral-300 px-2 py-1 text-[11px]">Redo</button>
+                      <button onClick={() => reuseAsScene(g)} className="rounded border border-neutral-300 px-2 py-1 text-[11px]" title="Use this image as a scene so you can put another model into it">Add another model to this</button>
+                      <button onClick={() => void startVideo(g, g.still!)} className="rounded bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white">{g.jobId ? "Another video" : "Make video"}</button>
+                    </div>
+                    <div className="mt-1 flex gap-1">
+                      <input value={g.edit} onChange={(e) => patch(g.id, { edit: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") void editStill(g); }} placeholder="Edit this image, e.g. add a sarong" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-[11px]" />
+                      <button onClick={() => void editStill(g)} disabled={!g.edit.trim() || g.editing} className="rounded border border-neutral-300 px-2 py-1 text-[11px] disabled:opacity-40">Edit</button>
+                    </div>
+                    {g.error && g.status === "done" && <p className="mt-1 text-xs text-red-600">{g.error}</p>}
+                  </>
+                )}
+                {j && (
+                  <div className="mt-2 rounded border border-neutral-200 p-1">
+                    {j.status === "done" && j.videoUrl ? (
+                      <>
+                        <video src={j.videoUrl} controls loop muted className="w-full rounded bg-black" />
+                        <a href={j.videoUrl} download target="_blank" rel="noreferrer" className="mt-1 inline-block rounded border border-neutral-300 px-2 py-1 text-[11px]">Download video</a>
+                      </>
+                    ) : j.status === "failed" ? (
+                      <div>
+                        <p className="text-xs text-red-600">{j.error}</p>
+                        <select defaultValue="" onChange={(e) => { if (e.target.value && g.still) void startVideo(g, g.still, e.target.value); e.target.value = ""; }} className="mt-1 rounded border border-neutral-300 px-1 py-1 text-[11px]">
+                          <option value="">Retry on another engine…</option>
+                          {CREATE_ENGINES.map((e) => (<option key={e.id} value={e.id}>{e.label}</option>))}
+                        </select>
+                      </div>
+                    ) : (
+                      <p className="py-5 text-center text-xs text-neutral-500">{j.note ?? "Making the video… (usually 2-6 minutes, keep working)"}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-3 text-xs text-neutral-400">Videos also appear in the Video tab under Create, where you can edit them.</p>
+    </section>
   );
 }
