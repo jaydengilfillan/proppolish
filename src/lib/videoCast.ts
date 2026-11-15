@@ -48,6 +48,11 @@ export function tweakModelPrompt(change: string): string {
   return `Edit this photo of the model. Keep the exact same person: identical face, age, skin tone and body, recognisably the same individual, same full-length pose, framing and plain light studio background. Apply only this change: ${change.slice(0, 300)}. If the change is about clothing, completely replace the whole outfit with it and remove every previous garment and accessory, leaving no pieces of the old outfit (no leftover jacket, trousers or shoes). ${SWIM.test(change) ? SWIM_RULE + " " : ""}${ALWAYS} Photorealistic, sharp, natural, no text.`;
 }
 
+/** Edit a finished scene image: change only what is asked, keep the person, scene, framing and light. */
+export function editScenePrompt(change: string): string {
+  return `Edit this photo. Keep everything exactly the same: the same person (face, hair, body), the scene, background, camera angle, framing, lighting and colour. Apply only this change: ${change.slice(0, 300)}. If it is about clothing, add or swap only that item and keep the rest of the person and scene identical. ${SWIM.test(change) ? "" : ""}Photorealistic, sharp, natural, no text.`;
+}
+
 export function placePrompt(outfit: string, action: string, tweak?: string): string {
   const dress = outfit
     ? `Dress them ONLY in this outfit: ${outfit.slice(0, 300)}, styled stylishly. `
