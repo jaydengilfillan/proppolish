@@ -23,6 +23,9 @@ async function falRun(model: string, input: Record<string, unknown>): Promise<st
   return url;
 }
 
+const grokEdit = (prompt: string, urls: string[], aspect?: string) =>
+  falRun("xai/grok-imagine-image/edit", { prompt, image_urls: urls.slice(0, 3), num_images: 1, resolution: "2k", output_format: "jpeg", aspect_ratio: aspect && /^(2:1|16:9|4:3|3:2|1:1|2:3|3:4|9:16|1:2)$/.test(aspect) ? aspect : "auto", enable_safety_checker: false });
+
 /** Google Gemini image model called directly (not through fal). Needs GOOGLE_API_KEY on the server. Result is hosted on fal storage so the rest of the app can reuse the URL. */
 async function geminiRun(prompt: string, urls: string[], aspect?: string): Promise<string> {
   const gkey = process.env.GOOGLE_API_KEY;
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : "nano";
+  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
   for (let attempt = 0; attempt < 3; attempt++) {
   try {
@@ -92,7 +95,9 @@ export async function POST(req: NextRequest) {
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
-        useEngine === "gemini"
+        useEngine === "grok"
+          ? await falRun("xai/grok-imagine-image", { prompt, aspect_ratio: "3:4", resolution: "2k", output_format: "jpeg", num_images: 1, enable_safety_checker: false })
+          : useEngine === "gemini"
           ? await geminiRun(prompt, [], "3:4")
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
@@ -101,7 +106,9 @@ export async function POST(req: NextRequest) {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       url =
-        useEngine === "gemini"
+        useEngine === "grok"
+          ? await grokEdit(prompt, [body.modelUrl], "3:4")
+          : useEngine === "gemini"
           ? await geminiRun(prompt, [body.modelUrl], "3:4")
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
@@ -112,7 +119,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "gemini"
+        useEngine === "grok"
+          ? await grokEdit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "gemini"
           ? await geminiRun(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.imageUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
@@ -123,7 +132,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "gemini"
+        useEngine === "grok"
+          ? await grokEdit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "gemini"
           ? await geminiRun(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
@@ -136,9 +147,9 @@ export async function POST(req: NextRequest) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
-    if (blockedByFilter && attempt < 2 && useEngine !== "gemini" && (useEngine === "seedream" || process.env.GOOGLE_API_KEY)) {
+    if (blockedByFilter && attempt < 2 && (useEngine === "seedream" || useEngine === "nano")) {
       // Quiet automatic retry. If Seedream blocked it, fall back to Nano Banana Pro (loosest setting) so the shot is never held up.
-      useEngine = useEngine === "seedream" ? "nano" : "gemini";
+      useEngine = useEngine === "seedream" ? "nano" : "grok";
       continue;
     }
     return NextResponse.json(
