@@ -30,7 +30,7 @@ export const OPTIONS = {
 
 /** Every model is an adult and always attractive, well groomed and stylishly dressed. */
 const ALWAYS =
-  "The person is a strikingly attractive, naturally beautiful adult, well groomed, healthy, with a great face and a confident, warm expression, and is always dressed in stylish, fashionable, flattering clothes that fit perfectly and suit their body. Premium lifestyle and real estate campaign quality casting, never plain, frumpy, unstylish or unflattering.";
+  "The person is an attractive, well-groomed adult with a confident, warm expression and a great look, always dressed in stylish, fashionable clothes that fit well and suit them. Premium lifestyle and real estate campaign casting, polished and tasteful, never plain or unstylish.";
 
 export function designPrompt(spec: ModelSpec, variant: number): string {
   const v = ["", " Give this option a distinctly different face and look from the others.", " Give this option another distinctly different face, bone structure and hairstyle detail from the others."][variant % 3];
