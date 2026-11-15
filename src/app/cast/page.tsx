@@ -386,8 +386,14 @@ export default function CastPage() {
     try {
       let still = bkUrl;
       if (bkPlace && active && !bkHasModel) {
-        const r = await api<{ url: string }>("/api/cast", { action: "place", engine: placeEngine, age: active.summary, sceneUrl: bkUrl, modelUrl: active.url, outfit: "", actionText: bkAction, tweak: "" });
-        still = r.url;
+        const placeBody = { action: "place", engine: placeEngine, age: active.summary, sceneUrl: bkUrl, modelUrl: active.url, outfit: "", actionText: bkAction, tweak: "" };
+        try {
+          still = (await api<{ url: string }>("/api/cast", placeBody)).url;
+        } catch {
+          // blocked: reword what you typed and try once more
+          patchJob(id, { note: "Filter refused it, rewording and retrying…" });
+          still = (await api<{ url: string }>("/api/cast", { ...placeBody, actionText: await reword(bkAction), softer: true })).url;
+        }
       }
       setBkStills((m) => ({ ...m, [id]: still }));
       patchJob(id, { note: undefined });
