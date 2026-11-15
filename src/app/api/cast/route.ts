@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "flux2" ? "flux2" : body.engine === "xai" ? "xai" : "nano";
+  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "seedream4" ? "seedream4" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "flux2" ? "flux2" : body.engine === "xai" ? "xai" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image|could not be processed|contained material|422/i;
   for (let attempt = 0; attempt < 6; attempt++) {
   try {
@@ -143,8 +143,8 @@ export async function POST(req: NextRequest) {
           ? await falRun("xai/grok-imagine-image", { prompt, aspect_ratio: "3:4", resolution: "2k", output_format: "jpeg", num_images: 1, enable_safety_checker: false })
           : useEngine === "gemini"
           ? await geminiRun(prompt, [], "3:4")
-          : useEngine === "seedream"
-          ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
+          : (useEngine === "seedream" || useEngine === "seedream4")
+          ? await falRun(`fal-ai/bytedance/seedream/${useEngine === "seedream4" ? "v4" : "v4.5"}/text-to-image`, { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
     } else if (body.action === "tweak") {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
@@ -158,8 +158,8 @@ export async function POST(req: NextRequest) {
           ? await grokEdit(prompt, [body.modelUrl], "3:4")
           : useEngine === "gemini"
           ? await geminiRun(prompt, [body.modelUrl], "3:4")
-          : useEngine === "seedream"
-          ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
+          : (useEngine === "seedream" || useEngine === "seedream4")
+          ? await falRun(`fal-ai/bytedance/seedream/${useEngine === "seedream4" ? "v4" : "v4.5"}/edit`, { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
     } else if (body.action === "editscene") {
       if (!isUrl(body.imageUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing image or change." }, { status: 400 });
@@ -175,8 +175,8 @@ export async function POST(req: NextRequest) {
           ? await grokEdit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
           : useEngine === "gemini"
           ? await geminiRun(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
-          : useEngine === "seedream"
-          ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.imageUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
+          : (useEngine === "seedream" || useEngine === "seedream4")
+          ? await falRun(`fal-ai/bytedance/seedream/${useEngine === "seedream4" ? "v4" : "v4.5"}/edit`, { prompt, image_urls: [body.imageUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.imageUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else if (body.action === "place") {
       if (!isUrl(body.sceneUrl) || !isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing scene or model image." }, { status: 400 });
@@ -193,8 +193,8 @@ export async function POST(req: NextRequest) {
           ? await grokEdit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
           : useEngine === "gemini"
           ? await geminiRun(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
-          : useEngine === "seedream"
-          ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
+          : (useEngine === "seedream" || useEngine === "seedream4")
+          ? await falRun(`fal-ai/bytedance/seedream/${useEngine === "seedream4" ? "v4" : "v4.5"}/edit`, { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else {
       return NextResponse.json({ error: "Unknown action." }, { status: 400 });
@@ -205,11 +205,13 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
     const noKey = /is not set on the server/i.test(msg);
+    // Stay on the engine you picked: retry it (attempt 2 softer wording, attempt 3 without your typed text).
+    if (blockedByFilter && attempt < 2 && !["xai", "gemini"].includes(useEngine)) continue;
+    // Only after 3 blocked tries in a row, escape off fal (xAI direct, then Gemini direct) if their keys are set.
     if ((blockedByFilter || noKey) && attempt < 5) {
-      // Quiet automatic retry down the chain; the last two steps run OFF fal (xAI direct, Gemini direct) when their keys are set.
-      const next: Record<string, CastEngine> = { seedream: "nano", nano: "flux2", flux2: "grok", grok: "xai", xai: "gemini" };
-      const n = next[useEngine];
-      if (n) {
+      const off: Record<string, CastEngine> = { xai: "gemini" };
+      const n = attempt === 2 ? "xai" : off[useEngine];
+      if (n && (attempt === 2 || useEngine === "xai")) {
         useEngine = n;
         continue;
       }
