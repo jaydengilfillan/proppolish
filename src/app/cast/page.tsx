@@ -119,12 +119,12 @@ function Select({ label, value, options, onChange }: { label: string; value: str
 
 export default function CastPage() {
   const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "smart casual", extra: "", plainBase: true });
-  const [engine, setEngine] = useState<CastEngine>("nano");
+  const [engine, setEngine] = useState<CastEngine>("seedream");
   const [opts, setOpts] = useState<{ url?: string; busy: boolean; error?: string; change?: string }[]>([]);
     const [saved, setSaved] = useState<SavedModel[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [rows, setRows] = useState<SceneRow[]>([{ id: "r1", outfit: "", action: "", tweak: "", tweakAll: "", busy: false }]);
-  const [placeEngine, setPlaceEngine] = useState<CastEngine>("nano");
+  const [placeEngine, setPlaceEngine] = useState<CastEngine>("seedream");
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const addRef = useRef<HTMLInputElement | null>(null);
   const [addBusy, setAddBusy] = useState(false);
