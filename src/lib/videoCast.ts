@@ -67,3 +67,16 @@ export function placePrompt(outfit: string, action: string, tweak?: string, age?
   const swim = SWIM.test(outfit) || SWIM.test(action) || SWIM.test(tweak ?? "");
   return `${swim ? swimRule(age) + " " : ""}Image 1 is the scene and image 2 is the model reference. Place the same person from image 2 into the scene from image 1. Use image 2 ONLY for the person's identity: face, hair, age, skin tone and build. Do NOT copy the clothing, shoes, accessories, pose or plain studio background from image 2: fully replace their clothing, with nothing left over from image 2. ${dress}The outfit, footwear and accessories must make sense for the location and activity in the scene (for example beachwear and bare feet on a beach or at a pool, no jackets, trousers or loafers there). ${action ? "They are " + action.slice(0, 300) + ". " : ""}${ALWAYS} Match the scene's lighting, colour, perspective, scale, shadows and reflections so they look truly photographed there, with natural contact with the ground and objects. Do not change the scene itself: keep the architecture, objects, camera angle, framing and crop exactly as in image 1, and add only this one person. Photorealistic, sharp, no text.${tweak ? " Adjustment requested, apply it clearly: " + tweak.slice(0, 300) + "." : ""}`;
 }
+
+/**
+ * Plain-language rewording for retries: swaps charged or slangy descriptors for neutral, factual clothing terms
+ * (e.g. "micro bikini" becomes "slim classic bikini"). Returns the reworded text; the caller shows it to the user.
+ */
+export function softenText(text: string): string {
+  let t = text;
+  t = t.replace(/\b(micro|tiny|itsy[- ]bitsy|string|skimpy|minimal|brazilian|thong)\s+(bikini|swimsuit|swimwear)/gi, "slim classic $2");
+  t = t.replace(/\b(sexy|seductive|provocative|revealing|sultry|busty|skin-?tight|tight|barely[- ]there|very small|tiny|skimpy)\b[,]?\s*/gi, "");
+  t = t.replace(/\b(bikini)\s+(body|babe)\b/gi, "$1");
+  t = t.replace(/\s{2,}/g, " ").trim();
+  return t || text;
+}
