@@ -119,6 +119,7 @@ export default function CastPage() {
   const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "smart casual", extra: "" });
   const [engine, setEngine] = useState<CastEngine>("nano");
   const [opts, setOpts] = useState<{ url?: string; busy: boolean; error?: string }[]>([]);
+  const [change, setChange] = useState("");
   const [saved, setSaved] = useState<SavedModel[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [rows, setRows] = useState<SceneRow[]>([{ id: "r1", outfit: "", action: "", tweak: "", tweakAll: "", busy: false }]);
@@ -162,6 +163,20 @@ export default function CastPage() {
         }
       })
     );
+  }
+
+  /** Change something on an option (outfit, hair, anything) without losing the person. */
+  async function tweakOption(i: number, text: string) {
+    const t = text.trim();
+    const cur = opts[i]?.url;
+    if (!t || !cur) return;
+    setOpts((o) => o.map((x, j) => (j === i ? { ...x, busy: true, error: undefined } : x)));
+    try {
+      const r = await api<{ url: string }>("/api/cast", { action: "tweak", engine, modelUrl: cur, change: t });
+      setOpts((o) => o.map((x, j) => (j === i ? { busy: false, url: r.url } : x)));
+    } catch (e) {
+      setOpts((o) => o.map((x, j) => (j === i ? { ...x, busy: false, error: e instanceof Error ? e.message : "Failed" } : x)));
+    }
   }
 
   function choose(url: string) {
@@ -270,10 +285,31 @@ export default function CastPage() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={o.url} alt={`Option ${i + 1}`} className="w-full rounded" />
                     <button onClick={() => choose(o.url!)} className="mt-2 w-full rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white">Choose this one</button>
+                    <button onClick={() => void tweakOption(i, change)} disabled={!change.trim() || o.busy} className="mt-1 w-full rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium disabled:opacity-40">Apply change to this one ({money(eng.cost)})</button>
                   </>
                 )}
               </div>
             ))}
+          </div>
+        )}
+        {opts.length > 0 && (
+          <div className="mt-3 rounded-lg border border-neutral-200 p-3">
+            <p className="mb-1 text-xs font-medium">Change something</p>
+            <textarea
+              value={change}
+              onChange={(e) => setChange(e.target.value)}
+              rows={2}
+              placeholder="e.g. red dress instead, shorter blonde hair, add sunglasses, different shoes"
+              className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+            />
+            <button
+              onClick={() => opts.forEach((o, i) => o.url && void tweakOption(i, change))}
+              disabled={!change.trim() || opts.every((o) => !o.url || o.busy)}
+              className="mt-2 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+            >
+              Apply to all options
+            </button>
+            <span className="ml-2 text-xs text-neutral-400">Keeps the same person and changes only what you typed. You can stack changes.</span>
           </div>
         )}
       </section>
