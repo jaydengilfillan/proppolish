@@ -36,6 +36,8 @@ export interface FalEditParams {
   aspectRatio?: string;
   /** Optional override of the model id. Defaults to config FAL_MODEL. */
   model?: string;
+  /** Nano Banana safety_tolerance, "1" strictest to "6" most relaxed (fal default "4"). Used where people in swimwear are normal. */
+  safetyTolerance?: string;
 }
 
 /** FAL's supported aspect_ratio enum values for nano-banana-pro/edit. */
@@ -100,6 +102,7 @@ export async function falEdit(params: FalEditParams): Promise<string> {
     resolution: params.resolution,
     aspect_ratio: params.aspectRatio ?? "auto",
     num_images: 1,
+    ...(params.safetyTolerance ? { safety_tolerance: params.safetyTolerance } : {}),
   };
 
   let resp: Response;
