@@ -597,7 +597,7 @@ interface Scene { id: string; preview: string; url?: string; w: number; h: numbe
 interface Gen {
   id: string; sceneId: string; scenePreview: string; sceneUrl: string; w: number; h: number;
   modelName: string; modelUrl: string; modelPreview: string; age: string;
-  outfit: string; action: string; engine: CastEngine; makeVideo: boolean; vidEngine: string; secs: number;
+  sceneText: string; outfit: string; action: string; engine: CastEngine; makeVideo: boolean; vidEngine: string; secs: number;
   status: "placing" | "done" | "error"; still?: string; error?: string; jobId?: string; tried: string[]; edit: string; editing?: boolean;
 }
 
@@ -609,6 +609,7 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
   const [selModels, setSelModels] = useState<string[]>([]);
   const [outfit, setOutfit] = useState("");
   const [action, setAction] = useState("");
+  const [sceneText, setSceneText] = useState("");
   const [takes, setTakes] = useState(1);
   const [placeEngine, setPlaceEngine] = useState<CastEngine>("seedream");
   const [makeVideo, setMakeVideo] = useState(true);
@@ -668,7 +669,9 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
     const a = over?.action ?? g.action;
     patch(g.id, { status: "placing", error: undefined, outfit: o, action: a, jobId: undefined, still: undefined });
     try {
-      const r = await api<{ url: string }>("/api/cast", { action: "place", softer: over?.softer === true, age: g.age, engine: g.engine, sceneUrl: g.sceneUrl, modelUrl: g.modelUrl, outfit: o, actionText: a, tweak: "", width: g.w, height: g.h });
+      const r = g.sceneUrl
+        ? await api<{ url: string }>("/api/cast", { action: "place", softer: over?.softer === true, age: g.age, engine: g.engine, sceneUrl: g.sceneUrl, modelUrl: g.modelUrl, outfit: o, actionText: a, tweak: "", width: g.w, height: g.h })
+        : await api<{ url: string }>("/api/cast", { action: "newscene", softer: over?.softer === true, age: g.age, engine: g.engine, modelUrl: g.modelUrl, sceneText: g.sceneText, outfit: o, actionText: a });
       patch(g.id, { status: "done", still: r.url });
       if (g.makeVideo) void startVideo({ ...g, outfit: o, action: a }, r.url);
     } catch (e) {
@@ -680,13 +683,14 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
     setErr("");
     const sc = scenes.filter((s) => selScenes.includes(s.id) && s.url);
     const ms = saved.filter((m) => selModels.includes(m.id));
-    if (sc.length === 0) return setErr("Add a scene and wait for it to finish uploading, then tick it.");
     if (ms.length === 0) return setErr("Tick at least one model.");
+    // No scene ticked: one run per model that creates the scene from your description (or a fitting one).
+    const list: { id: string; preview: string; url: string; w: number; h: number }[] = sc.length ? sc.map((s) => ({ id: s.id, preview: s.preview, url: s.url!, w: s.w, h: s.h })) : [{ id: "none", preview: "", url: "", w: 3, h: 4 }];
     const made: Gen[] = [];
-    for (const s of sc)
+    for (const s of list)
       for (const m of ms)
         for (let t = 0; t < takes; t++)
-          made.push({ id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, sceneId: s.id, scenePreview: s.preview, sceneUrl: s.url!, w: s.w, h: s.h, modelName: m.name, modelUrl: m.url, modelPreview: m.url, age: m.summary, outfit, action, engine: placeEngine, makeVideo, vidEngine, secs, status: "placing", tried: [], edit: "" });
+          made.push({ id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, sceneId: s.id, scenePreview: s.preview, sceneUrl: s.url, w: s.w, h: s.h, modelName: m.name, modelUrl: m.url, modelPreview: m.url, age: m.summary, sceneText, outfit, action, engine: placeEngine, makeVideo, vidEngine, secs, status: "placing", tried: [], edit: "" });
     setGens((l) => [...made, ...l]);
     made.forEach((g) => void run(g));
   }
@@ -727,7 +731,7 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, gens]);
 
-  const count = selScenes.filter((id) => scenes.find((s) => s.id === id)?.url).length * selModels.length * takes;
+  const count = Math.max(1, selScenes.filter((id) => scenes.find((s) => s.id === id)?.url).length) * selModels.length * takes;
   const perCost = placeEng.cost + (makeVideo ? estimateCreateUsd(CREATE_ENGINES.find((e) => e.id === vidEngine) ?? CREATE_ENGINES[0], secs, false, false) : 0);
   const running = gens.filter((g) => g.status === "placing" || (g.jobId && jobs.find((j) => j.id === g.jobId && !["done", "failed"].includes(j.status)))).length;
 
@@ -738,7 +742,7 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
         {running > 0 && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">{running} running in the background. Keep going.</span>}
       </div>
 
-      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">Scenes (tick one or more)</p>
+      <p className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">Scenes (optional: tick photos, or describe one below, or leave empty and one is created for you)</p>
       <div className="mb-4 flex flex-wrap gap-2">
         {scenes.map((s) => (
           <div key={s.id} onClick={() => setSelScenes((l) => toggle(l, s.id))} className={`relative h-24 w-24 cursor-pointer overflow-hidden rounded-lg border-2 ${selScenes.includes(s.id) ? "border-neutral-900" : "border-neutral-200 opacity-70"}`}>
@@ -772,6 +776,7 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
         </div>
       )}
 
+      <input value={sceneText} onChange={(e) => setSceneText(e.target.value)} disabled={selScenes.length > 0} placeholder={selScenes.length > 0 ? "Using your ticked scene photo(s)" : "Describe the scene (optional), e.g. a quiet Gold Coast beach at sunrise"} className="mb-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-50" />
       <div className="grid gap-2 sm:grid-cols-2">
         <input value={action} onChange={(e) => setAction(e.target.value)} placeholder="What are they doing? e.g. running along the beach" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
         <input value={outfit} onChange={(e) => setOutfit(e.target.value)} placeholder="Outfit: leave BLANK to keep the model's exact outfit" className="rounded border border-neutral-300 px-2 py-1.5 text-sm" />
@@ -818,7 +823,7 @@ function Workbench({ saved, activeId, setActiveId }: { saved: SavedModel[]; acti
               <div key={g.id} className="rounded-lg border border-neutral-200 p-2">
                 <div className="mb-2 flex items-center gap-2 text-[11px] text-neutral-500">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={g.scenePreview} alt="" className="h-8 w-8 rounded object-cover" />
+                  {g.scenePreview ? <img src={g.scenePreview} alt="" className="h-8 w-8 rounded object-cover" /> : <span className="rounded bg-neutral-100 px-1">new scene</span>}
                   <span>+</span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={g.modelPreview} alt="" className="h-8 w-8 rounded object-cover object-top" />
