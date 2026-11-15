@@ -55,14 +55,14 @@ export async function POST(req: NextRequest) {
           : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
     } else if (body.action === "tweak") {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
-      const prompt = tweakModelPrompt(str(body.change, 300), str(body.age, 40));
+      const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "" : str(body.age, 40)));
       url =
         useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
     } else if (body.action === "editscene") {
       if (!isUrl(body.imageUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing image or change." }, { status: 400 });
-      const prompt = editScenePrompt(str(body.change, 300), str(body.age, 40));
+      const prompt = editScenePrompt(str(body.change, 300), (body.softer === true ? "" : str(body.age, 40)));
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
           : await falEdit({ prompt, imageUrls: [body.imageUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else if (body.action === "place") {
       if (!isUrl(body.sceneUrl) || !isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing scene or model image." }, { status: 400 });
-      const prompt = placePrompt(str(body.outfit, 300), str(body.actionText, 300), str(body.tweak, 300), str(body.age, 40));
+      const prompt = placePrompt(str(body.outfit, 300), str(body.actionText, 300), str(body.tweak, 300), (body.softer === true ? "" : str(body.age, 40)));
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
