@@ -4,9 +4,9 @@
  * turns that into each engine's payload so the user never writes @Image tags.
  */
 
-export type CreateEngineId = "kling4" | "kling3pro" | "kling3std" | "klingpro" | "klingstd" | "seedance" | "seedance_i2v" | "seedance15";
+export type CreateEngineId = "kling4" | "kling3pro" | "kling3std" | "klingpro" | "klingstd" | "seedance" | "seedance_i2v" | "seedance15" | "wan22" | "minimaxh3";
 /** v3 = Kling 3.0 image-to-video (start image + elements), v4 = Kling 4.0 reference-to-video, omni = Kling O3 reference-to-video. */
-export type CreateKind = "v3" | "v4" | "omni" | "seedance" | "seedance_i2v" | "seedance15";
+export type CreateKind = "v3" | "v4" | "omni" | "seedance" | "seedance_i2v" | "seedance15" | "wan22" | "minimaxh3";
 export type Aspect = "16:9" | "9:16" | "1:1";
 
 export interface CreateEngine {
@@ -72,6 +72,24 @@ export const CREATE_ENGINES: CreateEngine[] = [
     blurb: "Reference to video with up to 4 images. 4-15s.",
     model: "bytedance/seedance-2.0/reference-to-video",
     minSecs: 4,
+    maxSecs: 15,
+  },
+  {
+    id: "wan22",
+    kind: "wan22",
+    label: "Wan 2.2 (backup, open model)",
+    blurb: "Open-weights model with its own safety settings off. Backup when others refuse. 3-10s.",
+    model: "fal-ai/wan/v2.2-a14b/image-to-video",
+    minSecs: 3,
+    maxSecs: 10,
+  },
+  {
+    id: "minimaxh3",
+    kind: "minimaxh3",
+    label: "MiniMax H3 Max (backup)",
+    blurb: "Different provider, safety checker switched off in the request. Backup when others refuse. 2-15s.",
+    model: "minimax/h3-max/image-to-video",
+    minSecs: 2,
     maxSecs: 15,
   },
   {
@@ -186,6 +204,8 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
         break;
       case "seedance_i2v":
       case "seedance15":
+      case "wan22":
+      case "minimaxh3":
         break;
       case "seedance":
         lines.push(input.startFromFirst && i === 0 ? `@Image1 is ${label} and is the exact opening frame of the video.` : `@Image${i + 1} is ${label}.`);
@@ -210,7 +230,7 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
 
 /** Engines that can't run without at least one image. */
 export function needsImage(engine: CreateEngine): boolean {
-  return engine.kind === "v3" || engine.kind === "seedance_i2v" || engine.kind === "seedance15";
+  return ["v3", "seedance_i2v", "seedance15", "wan22", "minimaxh3"].includes(engine.kind);
 }
 
 function buildCreatePayloadInner(engine: CreateEngine, input: CreateInput): Record<string, unknown> {
@@ -227,6 +247,33 @@ function buildCreatePayloadInner(engine: CreateEngine, input: CreateInput): Reco
         aspect_ratio: input.aspect,
         generate_audio: input.audio,
       };
+    case "wan22": {
+      if (urls.length === 0) throw new Error(`${engine.label} needs an image (it becomes the opening frame).`);
+      return {
+        prompt,
+        image_url: urls[0],
+        num_frames: Math.min(161, Math.max(17, Math.round(secs * 16))),
+        frames_per_second: 16,
+        resolution: input.final ? "720p" : "480p",
+        aspect_ratio: ["16:9", "9:16", "1:1"].includes(input.aspect) ? input.aspect : "auto",
+        enable_safety_checker: false,
+        enable_output_safety_checker: false,
+        enable_prompt_expansion: false,
+        interpolator_model: "film",
+        num_interpolated_frames: 1,
+      };
+    }
+    case "minimaxh3": {
+      if (urls.length === 0) throw new Error(`${engine.label} needs an image (it becomes the opening frame).`);
+      return {
+        prompt,
+        image_url: urls[0],
+        duration: secs,
+        resolution: input.final ? "1080P" : "768P",
+        enable_safety_checker: false,
+        prompt_expansion_mode: "disabled",
+      };
+    }
     case "seedance15": {
       if (urls.length === 0) throw new Error(`${engine.label} needs an image (it becomes the opening frame).`);
       return {
@@ -302,6 +349,10 @@ export function estimateCreateUsd(engine: CreateEngine, secs: number, final: boo
     case "kling3std":
     case "klingstd":
       return s * (audio ? 0.168 : 0.126);
+    case "wan22":
+      return s * (final ? 0.08 : 0.04);
+    case "minimaxh3":
+      return s * (final ? 0.16 : 0.08);
     case "seedance15": {
       const w = final ? 1920 : 1280, h = final ? 1080 : 720;
       return ((w * h * 24 * s) / 1024 / 1e6) * 2.5;
