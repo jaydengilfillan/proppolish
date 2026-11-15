@@ -127,7 +127,7 @@ export function estimateUsd(engine: Engine, secs: number, final: boolean): numbe
 
 export const FRAME_COST_USD = 0.15;
 
-export function buildPayload(engine: Engine, look: Look, input: EngineInput, scene?: Scene, extra?: string): Record<string, unknown> {
+function buildPayloadInner(engine: Engine, look: Look, input: EngineInput, scene?: Scene, extra?: string): Record<string, unknown> {
   const frames = Math.max(9, Math.round(input.secs * 24));
   switch (engine.id) {
     case "klingpro":
@@ -179,4 +179,9 @@ export function buildPayload(engine: Engine, look: Look, input: EngineInput, sce
         video_quality: "high",
       };
   }
+}
+
+/** Safety checker off where the model supports it (unknown fields are ignored by fal); provider-side moderation still applies. */
+export function buildPayload(engine: Engine, look: Look, input: EngineInput, scene?: Scene, extra?: string): Record<string, unknown> {
+  return { ...buildPayloadInner(engine, look, input, scene, extra), enable_safety_checker: false };
 }

@@ -192,7 +192,7 @@ export function needsImage(engine: CreateEngine): boolean {
   return engine.kind === "v3";
 }
 
-export function buildCreatePayload(engine: CreateEngine, input: CreateInput): Record<string, unknown> {
+function buildCreatePayloadInner(engine: CreateEngine, input: CreateInput): Record<string, unknown> {
   const prompt = composePrompt(input, engine);
   const secs = Math.min(engine.maxSecs, Math.max(engine.minSecs, Math.round(input.secs)));
   const urls = input.refs.map((r) => r.url);
@@ -263,4 +263,8 @@ export function estimateCreateUsd(engine: CreateEngine, secs: number, final: boo
       return (((w * h * 24 * s) / 1024) / 1000) * 0.0086;
     }
   }
+}
+
+export function buildCreatePayload(engine: CreateEngine, input: CreateInput): Record<string, unknown> {
+  return { ...buildCreatePayloadInner(engine, input), enable_safety_checker: false };
 }
