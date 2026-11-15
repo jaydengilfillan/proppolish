@@ -23,6 +23,10 @@ async function falRun(model: string, input: Record<string, unknown>): Promise<st
   return url;
 }
 
+const FLUX2_SIZE: Record<string, string> = { "16:9": "landscape_16_9", "9:16": "portrait_16_9", "3:4": "portrait_4_3", "4:3": "landscape_4_3" };
+const flux2Edit = (prompt: string, urls: string[], aspect?: string) =>
+  falRun("fal-ai/flux-2-pro/edit", { prompt, image_urls: urls.slice(0, 4), image_size: FLUX2_SIZE[aspect ?? ""] ?? "square_hd", output_format: "jpeg", safety_tolerance: "5" });
+
 const grokEdit = (prompt: string, urls: string[], aspect?: string) =>
   falRun("xai/grok-imagine-image/edit", { prompt, image_urls: urls.slice(0, 3), num_images: 1, resolution: "2k", output_format: "jpeg", aspect_ratio: aspect && /^(2:1|16:9|4:3|3:2|1:1|2:3|3:4|9:16|1:2)$/.test(aspect) ? aspect : "auto", enable_safety_checker: false });
 
@@ -111,9 +115,9 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "xai" ? "xai" : "nano";
+  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "flux2" ? "flux2" : body.engine === "xai" ? "xai" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
   try {
     let url: string;
     if (body.action === "design") {
@@ -131,7 +135,9 @@ export async function POST(req: NextRequest) {
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
-        useEngine === "xai"
+        useEngine === "flux2"
+          ? await falRun("fal-ai/flux-2-pro", { prompt, image_size: "portrait_4_3", output_format: "jpeg", safety_tolerance: "5" })
+          : useEngine === "xai"
           ? await xaiRun(prompt, [], "3:4")
           : useEngine === "grok"
           ? await falRun("xai/grok-imagine-image", { prompt, aspect_ratio: "3:4", resolution: "2k", output_format: "jpeg", num_images: 1, enable_safety_checker: false })
@@ -144,7 +150,9 @@ export async function POST(req: NextRequest) {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       url =
-        useEngine === "xai"
+        useEngine === "flux2"
+          ? await flux2Edit(prompt, [body.modelUrl], "3:4")
+          : useEngine === "xai"
           ? await xaiRun(prompt, [body.modelUrl], "3:4")
           : useEngine === "grok"
           ? await grokEdit(prompt, [body.modelUrl], "3:4")
@@ -159,7 +167,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "xai"
+        useEngine === "flux2"
+          ? await flux2Edit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "xai"
           ? await xaiRun(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
           : useEngine === "grok"
           ? await grokEdit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
@@ -174,7 +184,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "xai"
+        useEngine === "flux2"
+          ? await flux2Edit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "xai"
           ? await xaiRun(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
           : useEngine === "grok"
           ? await grokEdit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
@@ -191,9 +203,9 @@ export async function POST(req: NextRequest) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
-    if (blockedByFilter && attempt < 2 && (useEngine === "seedream" || useEngine === "nano")) {
+    if (blockedByFilter && attempt < 3 && (useEngine === "seedream" || useEngine === "nano" || useEngine === "flux2")) {
       // Quiet automatic retry. If Seedream blocked it, fall back to Nano Banana Pro (loosest setting) so the shot is never held up.
-      useEngine = useEngine === "seedream" ? "nano" : "grok";
+      useEngine = useEngine === "seedream" ? "nano" : useEngine === "nano" ? "flux2" : "grok";
       continue;
     }
     return NextResponse.json(
