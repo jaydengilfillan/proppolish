@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
         engineId === "seedream"
-          ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1 })
+          ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
       mode = `model · design · ${engineId}`;
     } else if (body.action === "place") {
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
         engineId === "seedream"
-          ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1 })
+          ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
       mode = `model · scene · ${engineId}`;
     } else {
