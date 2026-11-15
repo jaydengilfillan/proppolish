@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FalError, falEdit, nearestFalAspectRatio } from "@/lib/fal";
-import { CastEngine, ModelSpec, designPrompt, placePrompt, tweakModelPrompt, editScenePrompt } from "@/lib/videoCast";
+import { CastEngine, ModelSpec, designPrompt, placePrompt, newScenePrompt, tweakModelPrompt, editScenePrompt } from "@/lib/videoCast";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -150,6 +150,21 @@ export async function POST(req: NextRequest) {
     } else if (body.action === "tweak") {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "soft" : str(body.age, 40)));
+      url =
+        useEngine === "flux2"
+          ? await flux2Edit(prompt, [body.modelUrl], "3:4")
+          : useEngine === "xai"
+          ? await xaiRun(prompt, [body.modelUrl], "3:4")
+          : useEngine === "grok"
+          ? await grokEdit(prompt, [body.modelUrl], "3:4")
+          : useEngine === "gemini"
+          ? await geminiRun(prompt, [body.modelUrl], "3:4")
+          : (useEngine === "seedream" || useEngine === "seedream4")
+          ? await falRun(`fal-ai/bytedance/seedream/${useEngine === "seedream4" ? "v4" : "v4.5"}/edit`, { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
+          : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
+    } else if (body.action === "newscene") {
+      if (!isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing model image." }, { status: 400 });
+      const prompt = newScenePrompt(str(body.sceneText, 300), attempt >= 2 ? "" : str(body.outfit, 300), attempt >= 2 ? "walking naturally" : str(body.actionText, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       url =
         useEngine === "flux2"
           ? await flux2Edit(prompt, [body.modelUrl], "3:4")
