@@ -173,8 +173,8 @@ export default function EditPage() {
           </label>
         )}
         <div className="mt-4 flex items-center gap-3">
-          <button onClick={() => void run()} disabled={!sel || !change.trim() || busy} className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition disabled:opacity-40">
-            {busy ? "Starting…" : "Apply change"}
+          <button onClick={() => void run()} disabled={!sel || !change.trim()} className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition disabled:opacity-40">
+            {busy ? "Apply change (another is starting…)" : "Apply change"}
           </button>
           {!sel && <span className="text-xs text-neutral-500">Pick a clip first.</span>}
         </div>
