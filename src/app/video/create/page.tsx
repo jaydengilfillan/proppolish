@@ -393,10 +393,10 @@ export default function CreatePage() {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <button
           onClick={() => void generate()}
-          disabled={busy || !prompt.trim() || selected.length === 0}
+          disabled={!prompt.trim() || selected.length === 0}
           className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white transition disabled:opacity-40"
         >
-          {busy ? "Working…" : `Generate ${selected.length * takes} clip${selected.length * takes === 1 ? "" : "s"}`}
+          {`Generate ${selected.length * takes} clip${selected.length * takes === 1 ? "" : "s"}`}{busy ? " (another is starting…)" : ""}
         </button>
         <span className="text-sm text-neutral-500">Estimated {money(cost)} USD in total. Rough, from fal&apos;s list prices.</span>
       </div>
