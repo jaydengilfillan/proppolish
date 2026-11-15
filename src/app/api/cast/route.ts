@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FalError, falEdit, nearestFalAspectRatio } from "@/lib/fal";
-import { chargeCredits, checkCredits } from "@/lib/videoBilling";
-import { CAST_ENGINES, CastEngine, ModelSpec, designPrompt, placePrompt, tweakModelPrompt } from "@/lib/videoCast";
+import { CastEngine, ModelSpec, designPrompt, placePrompt, tweakModelPrompt } from "@/lib/videoCast";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -33,14 +32,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   const engineId: CastEngine = body.engine === "seedream" ? "seedream" : "nano";
-  const engine = CAST_ENGINES.find((e) => e.id === engineId)!;
-  const blocked = await checkCredits(req, engine.cost);
-  if (blocked) return blocked;
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
   for (let attempt = 0; attempt < 2; attempt++) {
   try {
     let url: string;
-    let mode: string;
     if (body.action === "design") {
       const s = (body.spec ?? {}) as Record<string, unknown>;
       const spec: ModelSpec = {
@@ -57,7 +52,6 @@ export async function POST(req: NextRequest) {
         engineId === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
-      mode = `model · design · ${engineId}`;
     } else if (body.action === "tweak") {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300));
@@ -65,7 +59,6 @@ export async function POST(req: NextRequest) {
         engineId === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
-      mode = `model · change · ${engineId}`;
     } else if (body.action === "place") {
       if (!isUrl(body.sceneUrl) || !isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing scene or model image." }, { status: 400 });
       const prompt = placePrompt(str(body.outfit, 300), str(body.actionText, 300), str(body.tweak, 300));
@@ -75,11 +68,9 @@ export async function POST(req: NextRequest) {
         engineId === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
-      mode = `model · scene · ${engineId}`;
     } else {
       return NextResponse.json({ error: "Unknown action." }, { status: 400 });
     }
-    await chargeCredits(req, engine.cost, mode, "fal", url);
     return NextResponse.json({ url });
   } catch (err) {
     const status = err instanceof FalError ? err.status : 500;
