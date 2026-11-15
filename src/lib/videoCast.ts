@@ -22,6 +22,8 @@ export interface ModelSpec {
   extra: string;
   /** Dress the model in a plain neutral base outfit so no clothes get carried into scenes. */
   plainBase: boolean;
+  /** Optional activity / props, e.g. "surfing, holding a surfboard". */
+  activity?: string;
 }
 
 export const OPTIONS = {
@@ -61,7 +63,7 @@ export function designPrompt(spec: ModelSpec, variant: number): string {
   const useBase = spec.plainBase && !spec.outfit.trim();
   const beach = !useBase && SWIM.test(spec.outfit);
   const v = ["", " Give this option a distinctly different face and look from the others.", " Give this option another distinctly different face, bone structure and hairstyle detail from the others."][variant % 3];
-  return `Photorealistic full-length photograph of one ${spec.age} ${spec.gender} model with ${spec.hairColour} ${spec.hairStyle} hair, ${spec.build} build, ${useBase || !spec.outfit.trim() ? "wearing a simple plain fitted neutral base outfit (plain fitted tank top and plain shorts, no jacket, no layers, no patterns)" : "wearing " + spec.outfit.slice(0, 300) + ", styled stylishly"}. ${beach ? swimRule(spec.age) + " " : ""}${glam(spec) + " "}${spec.extra ? "Extra detail: " + spec.extra.slice(0, 400) + ". " : ""}${ALWAYS} Standing in a confident model pose, facing the camera, full body from head to toe in frame with space around them, on a plain light neutral studio background, soft glamorous flattering light, sharp focus, flawless glowing skin, shot on a professional camera. No text, no logos, no other people.${v}`;
+  return `Photorealistic full-length photograph of one ${spec.age} ${spec.gender} model with ${spec.hairColour} ${spec.hairStyle} hair, ${spec.build} build, ${useBase || !spec.outfit.trim() ? "wearing a simple plain fitted neutral base outfit (plain fitted tank top and plain shorts, no jacket, no layers, no patterns)" : "wearing " + spec.outfit.slice(0, 300) + ", styled stylishly"}. ${beach ? swimRule(spec.age) + " " : ""}${glam(spec) + " "}${spec.extra ? "Extra detail: " + spec.extra.slice(0, 400) + ". " : ""}${ALWAYS} ${spec.activity?.trim() ? "Shown " + spec.activity.trim().slice(0, 200) + ", naturally holding the props that go with it, in a natural active pose, looking toward the camera, with a genuine candid expression, " : "Standing in a confident model pose, facing the camera, "}full body from head to toe in frame with space around them, on a plain light neutral studio background, soft glamorous flattering light, sharp focus, flawless glowing skin, shot on a professional camera. No text, no logos, no other people.${v}`;
 }
 
 /** Beach-lifestyle campaign look: the swimwear is the whole outfit, nothing layered over it. Slimmer and more glamorous for 20s and 30s. */
