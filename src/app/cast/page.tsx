@@ -463,8 +463,9 @@ export default function CastPage() {
       </section>
 
       {/* Saved models */}
-      <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
-        <h2 className="mb-3 text-sm font-semibold">Your models</h2>
+      <details className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+        <summary className="cursor-pointer text-sm font-semibold">Your models ({saved.length}) <span className="text-xs font-normal text-neutral-400">click to open or close</span></summary>
+        <div className="mt-3">
         {saved.length === 0 ? (
           <p className="text-xs text-neutral-500">Choose one of the options above and it is saved here. Saved in this browser.</p>
         ) : (
@@ -483,7 +484,8 @@ export default function CastPage() {
             ))}
           </div>
         )}
-      </section>
+        </div>
+      </details>
 
       {/* Looks for the active model */}
       {active && (
