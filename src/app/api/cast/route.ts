@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
   let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "flux2" ? "flux2" : body.engine === "xai" ? "xai" : "nano";
-  const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
+  const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image|could not be processed|contained material|422/i;
   for (let attempt = 0; attempt < 4; attempt++) {
   try {
     let url: string;
@@ -180,7 +180,8 @@ export async function POST(req: NextRequest) {
           : await falEdit({ prompt, imageUrls: [body.imageUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else if (body.action === "place") {
       if (!isUrl(body.sceneUrl) || !isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing scene or model image." }, { status: 400 });
-      const prompt = placePrompt(str(body.outfit, 300), str(body.actionText, 300), str(body.tweak, 300), (body.softer === true ? "soft" : str(body.age, 40)));
+      const bare = attempt >= 2;
+      const prompt = placePrompt(bare ? "" : str(body.outfit, 300), bare ? "walking naturally" : str(body.actionText, 300), bare ? "" : str(body.tweak, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
