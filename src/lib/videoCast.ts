@@ -108,3 +108,11 @@ export function softenText(text: string): string {
   t = t.replace(/\s{2,}/g, " ").trim();
   return t || text;
 }
+
+/** No scene photo: create the scene from a text description (or pick a fitting one) with the model in it. */
+export function newScenePrompt(sceneText: string, outfit: string, action: string, age?: string): string {
+  const hasOutfit = outfit.trim().length > 0;
+  const swim = SWIM.test(outfit) || SWIM.test(action) || SWIM.test(sceneText);
+  const place = sceneText.trim() ? sceneText.trim().slice(0, 300) : action.trim() ? `a beautiful, realistic location that suits this: ${action.trim().slice(0, 200)}` : "a beautiful, bright, realistic Gold Coast lifestyle location";
+  return `Create a photorealistic, high-end lifestyle photo of the person in the reference image, in this setting: ${place}. ${action.trim() ? "The person is " + action.trim().slice(0, 300) + ". " : ""}${hasOutfit ? `Dress them in ${outfit.trim().slice(0, 300)}.` : "STRICT RULE: keep the person EXACTLY as they appear in the reference image: the same face, hair, body and the exact same outfit."} ${swim ? swimRule(age) : ""} Natural light, candid editorial look, full body visible, natural skin, sharp, realistic. ${ALWAYS}`;
+}
