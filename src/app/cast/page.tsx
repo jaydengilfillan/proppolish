@@ -158,7 +158,7 @@ export default function CastPage() {
   const addRef = useRef<HTMLInputElement | null>(null);
   const { jobs, addJobs, track, patchJob } = useVideoStore();
   const [makeVideo, setMakeVideo] = useState(true);
-  const [vidEngine, setVidEngine] = useState("seedance");
+  const [vidEngine, setVidEngine] = useState("kling3pro");
   const [vidSecs, setVidSecs] = useState(5);
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
