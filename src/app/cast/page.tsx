@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { APP_NAME } from "@/lib/config";
 import { triggerDownload, urlToBlob } from "@/lib/image";
-import { CAST_ENGINES, CastEngine, ModelSpec, OPTIONS } from "@/lib/videoCast";
+import { CAST_ENGINES, CastEngine, ModelSpec, OPTIONS, softenText } from "@/lib/videoCast";
 
 interface SavedModel {
   id: string;
@@ -185,6 +185,19 @@ export default function CastPage() {
     }
   }
 
+  /** Retry a failed option with the description and extra text rewritten in plainer terms. */
+  async function retryOption(i: number) {
+    const softSpec: ModelSpec = { ...spec, outfit: softenText(spec.outfit), extra: softenText(spec.extra) };
+    setSpec(softSpec);
+    setOpts((o) => o.map((x, j) => (j === i ? { busy: true } : x)));
+    try {
+      const r = await api<{ url: string }>("/api/cast", { action: "design", engine, spec: softSpec, variant: i, softer: true });
+      setOpts((o) => o.map((x, j) => (j === i ? { busy: false, url: r.url, change: "" } : x)));
+    } catch (e) {
+      setOpts((o) => o.map((x, j) => (j === i ? { busy: false, error: e instanceof Error ? e.message : "Failed" } : x)));
+    }
+  }
+
   function choose(url: string) {
     const name = window.prompt("Name this model", `Model ${saved.length + 1}`)?.trim();
     if (!name) return;
@@ -214,29 +227,32 @@ export default function CastPage() {
     }
   }
 
+  async function runLook(i: number, l: string, softer = false) {
+    if (!active) return;
+    setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: true } : x)));
+    try {
+      const r = await api<{ url: string }>("/api/cast", {
+        action: "editscene",
+        engine: "seedream",
+        softer,
+        age: active.summary,
+        imageUrl: active.url,
+        width: active.width,
+        height: active.height,
+        change: `Change the person's whole outfit to ${l}, fully replacing every garment they are wearing. Keep the same face, hair, body, pose and background`,
+      });
+      setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: false, url: r.url } : x)));
+    } catch (e) {
+      setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: false, error: e instanceof Error ? e.message : "Failed" } : x)));
+    }
+  }
+
   /** Generate the active model in each ticked outfit/style (Seedream), keeping the same person. */
   async function generateLooks() {
     if (!active || looks.length === 0) return;
     const list = [...looks];
     setLookResults(list.map((l) => ({ look: l, busy: true })));
-    await Promise.all(
-      list.map(async (l, i) => {
-        try {
-          const r = await api<{ url: string }>("/api/cast", {
-            action: "editscene",
-            engine: "seedream",
-            age: active.summary,
-            imageUrl: active.url,
-            width: active.width,
-            height: active.height,
-            change: `Change the person's whole outfit to ${l}, fully replacing every garment they are wearing. Keep the same face, hair, body, pose and background`,
-          });
-          setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: false, url: r.url } : x)));
-        } catch (e) {
-          setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: false, error: e instanceof Error ? e.message : "Failed" } : x)));
-        }
-      })
-    );
+    await Promise.all(list.map((l, i) => runLook(i, l)));
   }
 
   const patchRow = (id: string, p: Partial<SceneRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...p } : x)));
@@ -253,13 +269,14 @@ export default function CastPage() {
     }
   }
 
-  async function place(row: SceneRow, tweak?: string) {
+  async function place(row: SceneRow, tweak?: string, softer = false) {
     if (!active || !row.sceneUrl) return;
     const t = [row.tweakAll, tweak].filter(Boolean).join(". ");
     patchRow(row.id, { busy: true, error: undefined, tweak: "", tweakAll: t });
     try {
       const r = await api<{ url: string }>("/api/cast", {
         action: "place",
+        softer,
         age: active.summary,
         engine: placeEngine,
         sceneUrl: row.sceneUrl,
@@ -356,7 +373,12 @@ export default function CastPage() {
             {opts.map((o, i) => (
               <div key={i} className="rounded-lg border border-neutral-200 p-2">
                 {o.busy && <p className="py-20 text-center text-xs text-neutral-500">Generating…</p>}
-                {o.error && <p className="text-xs text-red-600">{o.error}</p>}
+                {o.error && (
+                  <>
+                    <p className="text-xs text-red-600">{o.error}</p>
+                    <button onClick={() => void retryOption(i)} className="mt-1 w-full rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword in plainer terms and retry</button>
+                  </>
+                )}
                 {o.url && (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -423,7 +445,12 @@ export default function CastPage() {
                 <div key={i} className="rounded-lg border border-neutral-200 p-2">
                   <p className="mb-1 text-[11px] text-neutral-500">{r.look}</p>
                   {r.busy && <p className="py-16 text-center text-xs text-neutral-500">Generating…</p>}
-                  {r.error && <p className="text-xs text-red-600">{r.error}</p>}
+                  {r.error && (
+                    <>
+                      <p className="text-xs text-red-600">{r.error}</p>
+                      <button onClick={() => void runLook(i, softenText(r.look), true)} className="mt-1 w-full rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword in plainer terms and retry</button>
+                    </>
+                  )}
                   {r.url && (
                     <>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -483,7 +510,22 @@ export default function CastPage() {
                 </button>
                 {rows.length > 1 && <button onClick={() => setRows((x) => x.filter((y) => y.id !== r.id))} className="text-xs text-neutral-400 underline">Remove</button>}
               </div>
-              {r.error && <p className="mt-2 text-xs text-red-600">{r.error}</p>}
+              {r.error && (
+                <div className="mt-2">
+                  <p className="text-xs text-red-600">{r.error}</p>
+                  <button
+                    onClick={() => {
+                      const u = { ...r, outfit: softenText(r.outfit), action: softenText(r.action), tweakAll: softenText(r.tweakAll) };
+                      patchRow(r.id, { outfit: u.outfit, action: u.action, tweakAll: u.tweakAll });
+                      void place(u, undefined, true);
+                    }}
+                    className="mt-1 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white"
+                  >
+                    Reword in plainer terms and retry
+                  </button>
+                  <span className="ml-2 text-xs text-neutral-400">Your outfit and action text is rewritten in neutral wording (shown above) and run again.</span>
+                </div>
+              )}
               {r.result && (
                 <div className="mt-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
