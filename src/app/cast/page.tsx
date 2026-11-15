@@ -199,8 +199,7 @@ export default function CastPage() {
 
   /** Retry a failed option with the description and extra text rewritten in plainer terms. */
   async function retryOption(i: number) {
-    const softSpec: ModelSpec = { ...spec, outfit: await reword(spec.outfit), extra: await reword(spec.extra) };
-    setSpec(softSpec);
+    const softSpec: ModelSpec = { ...spec, extra: await reword(spec.extra) };
     setOpts((o) => o.map((x, j) => (j === i ? { busy: true } : x)));
     try {
       const r = await api<{ url: string }>("/api/cast", { action: "design", engine, spec: softSpec, variant: i, softer: true });
