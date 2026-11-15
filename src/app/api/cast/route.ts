@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
   }
   let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "seedream4" ? "seedream4" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "flux2" ? "flux2" : body.engine === "xai" ? "xai" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image|could not be processed|contained material|422/i;
+  let firstBlock = "";
   for (let attempt = 0; attempt < 6; attempt++) {
   try {
     let url: string;
@@ -205,6 +206,7 @@ export async function POST(req: NextRequest) {
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
     const noKey = /is not set on the server/i.test(msg);
+    if (blockedByFilter && !firstBlock) firstBlock = msg;
     // Stay on the engine you picked: retry it (attempt 2 softer wording, attempt 3 without your typed text).
     if (blockedByFilter && attempt < 2 && !["xai", "gemini"].includes(useEngine)) continue;
     // Only after 3 blocked tries in a row, escape off fal (xAI direct, then Gemini direct) if their keys are set.
@@ -216,8 +218,11 @@ export async function POST(req: NextRequest) {
         continue;
       }
     }
+    // If the off-fal engines have no key, show the real block message instead of the missing-key one.
+    const shown = noKey && firstBlock ? firstBlock : msg;
+    const blocked = noKey && firstBlock ? true : blockedByFilter;
     return NextResponse.json(
-      { error: blockedByFilter ? `The image filter blocked this (${msg.slice(0, 120)}). Try again, switch to Nano Banana Pro, or reword the outfit (for example "one-piece swimsuit", "beach cover-up", "resort wear").` : msg },
+      { error: blocked ? `The image filter blocked this (${shown.slice(0, 120)}). Try again, switch to Nano Banana Pro, or reword the outfit (for example "one-piece swimsuit", "beach cover-up", "resort wear").` : msg },
       { status }
     );
   }
