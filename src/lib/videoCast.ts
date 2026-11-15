@@ -33,14 +33,15 @@ export const OPTIONS = {
 
 /** Every model is an adult and always attractive, well groomed and stylishly dressed. */
 const ALWAYS =
-  "The person is a good-looking, well-groomed adult with a confident, warm expression, dressed in stylish, fashionable clothes. Polished, tasteful lifestyle and real estate campaign casting.";
+  "The person is a strikingly attractive adult with a confident, warm, magnetic expression, wearing fashionable, flattering clothes. High-end lifestyle campaign casting, not corporate or conservative.";
 
+const GLAM = "Glamorous and head-turning: fit, toned figure, healthy glowing tan, hair worn loose and softly tousled, light natural makeup, effortless Gold Coast beach-lifestyle style, flattering fitted clothing. Not a librarian or office look.";
 const SWIM = /bikini|swim|beachwear|bather|one-piece|trunks|togs/i;
 
 export function designPrompt(spec: ModelSpec, variant: number): string {
   const beach = !spec.plainBase && SWIM.test(spec.outfit);
   const v = ["", " Give this option a distinctly different face and look from the others.", " Give this option another distinctly different face, bone structure and hairstyle detail from the others."][variant % 3];
-  return `Photorealistic full-length photograph of one ${spec.age} ${spec.gender} model with ${spec.hairColour} ${spec.hairStyle} hair, ${spec.build} build, ${spec.plainBase ? "wearing a simple plain fitted neutral base outfit (plain fitted tank top and plain shorts, no jacket, no layers, no patterns)" : "wearing a stylish " + spec.outfit + " outfit"}. ${beach ? swimRule(spec.age) + " " : ""}${spec.extra ? "Extra detail: " + spec.extra.slice(0, 400) + ". " : ""}${ALWAYS} Standing relaxed, facing the camera, full body from head to toe in frame with space around them, on a plain light neutral studio background, soft even flattering light, sharp focus, natural skin texture, natural proportions, shot on a professional camera. No text, no logos, no other people.${v}`;
+  return `Photorealistic full-length photograph of one ${spec.age} ${spec.gender} model with ${spec.hairColour} ${spec.hairStyle} hair, ${spec.build} build, ${spec.plainBase ? "wearing a simple plain fitted neutral base outfit (plain fitted tank top and plain shorts, no jacket, no layers, no patterns)" : "wearing a stylish " + spec.outfit + " outfit"}. ${beach ? swimRule(spec.age) + " " : ""}${isYoung(spec.age) ? GLAM + " " : ""}${spec.extra ? "Extra detail: " + spec.extra.slice(0, 400) + ". " : ""}${ALWAYS} Standing relaxed, facing the camera, full body from head to toe in frame with space around them, on a plain light neutral studio background, soft even flattering light, sharp focus, natural skin texture, natural proportions, shot on a professional camera. No text, no logos, no other people.${v}`;
 }
 
 /** Beach-lifestyle campaign look: the swimwear is the whole outfit, nothing layered over it. Slimmer and more glamorous for 20s and 30s. */
