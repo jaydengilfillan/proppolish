@@ -44,6 +44,18 @@ async function api<T>(path: string, body: unknown): Promise<T> {
   return json as T;
 }
 
+/** Creative reword: an LLM rewrites the text in subtler catalogue wording with the same meaning; falls back to the plain word swap. */
+async function reword(text: string): Promise<string> {
+  if (!text.trim()) return text;
+  try {
+    const r = await api<{ text: string; changed?: boolean }>("/api/cast/reword", { text });
+    if (r.changed && r.text) return r.text;
+  } catch {
+    /* fall through */
+  }
+  return softenText(text);
+}
+
 async function uploadToFal(blob: Blob, fileName: string): Promise<string> {
   const { uploadUrl, fileUrl } = await api<{ uploadUrl: string; fileUrl: string }>("/api/video/upload-init", { contentType: blob.type, fileName });
   const put = await fetch(uploadUrl, { method: "PUT", body: blob, headers: { "Content-Type": blob.type } });
@@ -187,7 +199,7 @@ export default function CastPage() {
 
   /** Retry a failed option with the description and extra text rewritten in plainer terms. */
   async function retryOption(i: number) {
-    const softSpec: ModelSpec = { ...spec, outfit: softenText(spec.outfit), extra: softenText(spec.extra) };
+    const softSpec: ModelSpec = { ...spec, outfit: await reword(spec.outfit), extra: await reword(spec.extra) };
     setSpec(softSpec);
     setOpts((o) => o.map((x, j) => (j === i ? { busy: true } : x)));
     try {
@@ -376,7 +388,7 @@ export default function CastPage() {
                 {o.error && (
                   <>
                     <p className="text-xs text-red-600">{o.error}</p>
-                    <button onClick={() => void retryOption(i)} className="mt-1 w-full rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword in plainer terms and retry</button>
+                    <button onClick={() => void retryOption(i)} className="mt-1 w-full rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword subtly and retry</button>
                   </>
                 )}
                 {o.url && (
@@ -448,7 +460,7 @@ export default function CastPage() {
                   {r.error && (
                     <>
                       <p className="text-xs text-red-600">{r.error}</p>
-                      <button onClick={() => void runLook(i, softenText(r.look), true)} className="mt-1 w-full rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword in plainer terms and retry</button>
+                      <button onClick={async () => void runLook(i, await reword(r.look), true)} className="mt-1 w-full rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Reword subtly and retry</button>
                     </>
                   )}
                   {r.url && (
@@ -514,16 +526,16 @@ export default function CastPage() {
                 <div className="mt-2">
                   <p className="text-xs text-red-600">{r.error}</p>
                   <button
-                    onClick={() => {
-                      const u = { ...r, outfit: softenText(r.outfit), action: softenText(r.action), tweakAll: softenText(r.tweakAll) };
+                    onClick={async () => {
+                      const u = { ...r, outfit: await reword(r.outfit), action: await reword(r.action), tweakAll: await reword(r.tweakAll) };
                       patchRow(r.id, { outfit: u.outfit, action: u.action, tweakAll: u.tweakAll });
                       void place(u, undefined, true);
                     }}
                     className="mt-1 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white"
                   >
-                    Reword in plainer terms and retry
+                    Reword subtly and retry
                   </button>
-                  <span className="ml-2 text-xs text-neutral-400">Your outfit and action text is rewritten in neutral wording (shown above) and run again.</span>
+                  <span className="ml-2 text-xs text-neutral-400">Your text is rewritten in subtler wording with the same meaning (shown above) and run again.</span>
                 </div>
               )}
               {r.result && (
