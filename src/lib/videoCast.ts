@@ -2,11 +2,12 @@
  * Cast: design a consistent model, then place that same person into different scenes and outfits.
  * Image engines: Nano Banana Pro (best identity hold) or Seedream 4.5 (cheaper).
  */
-export type CastEngine = "nano" | "seedream";
+export type CastEngine = "nano" | "seedream" | "flux";
 
 export const CAST_ENGINES: { id: CastEngine; label: string; blurb: string; cost: number }[] = [
   { id: "nano", label: "Nano Banana Pro", blurb: "Best at keeping the same face", cost: 0.15 },
   { id: "seedream", label: "Seedream 4.5", blurb: "Cheaper, try it side by side", cost: 0.04 },
+  { id: "flux", label: "FLUX Kontext Max", blurb: "Loosest filter, backup when others block", cost: 0.08 },
 ];
 
 export interface ModelSpec {
