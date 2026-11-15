@@ -23,9 +23,47 @@ async function falRun(model: string, input: Record<string, unknown>): Promise<st
   return url;
 }
 
-const FLUX_BASE = { safety_tolerance: "6", output_format: "jpeg", num_images: 1 };
-const fluxEdit = (prompt: string, urls: string[], aspect?: string) =>
-  falRun("fal-ai/flux-pro/kontext/max/multi", { ...FLUX_BASE, prompt, image_urls: urls, ...(aspect ? { aspect_ratio: aspect } : {}) });
+/** Google Gemini image model called directly (not through fal). Needs GOOGLE_API_KEY on the server. Result is hosted on fal storage so the rest of the app can reuse the URL. */
+async function geminiRun(prompt: string, urls: string[], aspect?: string): Promise<string> {
+  const gkey = process.env.GOOGLE_API_KEY;
+  if (!gkey) throw new FalError(500, "GOOGLE_API_KEY is not set on the server (add it in Vercel, then redeploy).");
+  const parts: Record<string, unknown>[] = [];
+  for (const u of urls) {
+    const r = await fetch(u);
+    if (!r.ok) throw new FalError(502, `Could not read an input image (${r.status}).`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    parts.push({ inlineData: { mimeType: r.headers.get("content-type")?.split(";")[0] || "image/jpeg", data: buf.toString("base64") } });
+  }
+  parts.push({ text: prompt });
+  const cats = ["HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT"];
+  const resp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent", {
+    method: "POST",
+    headers: { "x-goog-api-key": gkey, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts }],
+      generationConfig: { responseModalities: ["TEXT", "IMAGE"], ...(aspect ? { imageConfig: { aspectRatio: aspect } } : {}) },
+      safetySettings: cats.map((category) => ({ category, threshold: "BLOCK_NONE" })),
+    }),
+  });
+  const text = await resp.text();
+  if (!resp.ok) throw new FalError(resp.status, `gemini (${resp.status}): ${text.slice(0, 300)}`);
+  const json = JSON.parse(text) as { candidates?: { content?: { parts?: { inlineData?: { mimeType?: string; data?: string } }[] } }[] };
+  const img = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
+  if (!img?.data) throw new FalError(422, "Gemini returned no image (blocked or empty).");
+  const fkey = process.env.FAL_KEY;
+  if (!fkey) throw new FalError(500, "FAL_KEY is not set on the server.");
+  const ct = img.mimeType || "image/png";
+  const init = await fetch("https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3", {
+    method: "POST",
+    headers: { Authorization: `Key ${fkey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ content_type: ct, file_name: `gemini-${Date.now()}.${ct.includes("jpeg") ? "jpg" : "png"}` }),
+  });
+  if (!init.ok) throw new FalError(502, `fal upload init failed (${init.status}).`);
+  const { upload_url, file_url } = (await init.json()) as { upload_url: string; file_url: string };
+  const put = await fetch(upload_url, { method: "PUT", body: Buffer.from(img.data, "base64"), headers: { "Content-Type": ct } });
+  if (!put.ok) throw new FalError(502, `fal upload failed (${put.status}).`);
+  return file_url;
+}
 
 /** Design a model (text to image) or place a chosen model into a scene (edit). */
 export async function POST(req: NextRequest) {
@@ -35,7 +73,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "flux" ? "flux" : "nano";
+  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
   for (let attempt = 0; attempt < 3; attempt++) {
   try {
@@ -54,8 +92,8 @@ export async function POST(req: NextRequest) {
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
-        useEngine === "flux"
-          ? await falRun("fal-ai/flux-pro/kontext/max/text-to-image", { ...FLUX_BASE, prompt, aspect_ratio: "3:4" })
+        useEngine === "gemini"
+          ? await geminiRun(prompt, [], "3:4")
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
@@ -63,8 +101,8 @@ export async function POST(req: NextRequest) {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       url =
-        useEngine === "flux"
-          ? await fluxEdit(prompt, [body.modelUrl], "3:4")
+        useEngine === "gemini"
+          ? await geminiRun(prompt, [body.modelUrl], "3:4")
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
@@ -74,8 +112,8 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "flux"
-          ? await fluxEdit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
+        useEngine === "gemini"
+          ? await geminiRun(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.imageUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.imageUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
@@ -85,8 +123,8 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "flux"
-          ? await fluxEdit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
+        useEngine === "gemini"
+          ? await geminiRun(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
           : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
@@ -98,9 +136,9 @@ export async function POST(req: NextRequest) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
-    if (blockedByFilter && attempt === 0 && useEngine === "seedream") {
+    if (blockedByFilter && attempt < 2 && useEngine !== "gemini" && (useEngine === "seedream" || process.env.GOOGLE_API_KEY)) {
       // Quiet automatic retry. If Seedream blocked it, fall back to Nano Banana Pro (loosest setting) so the shot is never held up.
-      useEngine = "nano";
+      useEngine = useEngine === "seedream" ? "nano" : "gemini";
       continue;
     }
     return NextResponse.json(
