@@ -30,6 +30,7 @@ interface SceneRow {
   tweakAll: string;
   result?: string;
   videoJobId?: string;
+  videoTried?: string[];
   busy: boolean;
   error?: string;
 }
@@ -326,9 +327,26 @@ export default function CastPage() {
     }
   }
 
+  /** If a scene video is refused by a content filter, quietly retry it on the next engine (no re-typing). */
+  const retriedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const CHAIN = ["seedance15", "kling3pro", "kling3std", "seedance_i2v"];
+    for (const r of rows) {
+      if (!r.videoJobId || !r.result) continue;
+      const j = jobs.find((x) => x.id === r.videoJobId);
+      if (!j || j.status !== "failed" || retriedRef.current.has(j.id)) continue;
+      if (!/content|policy|likeness|safety|moderat|flagged|blocked|partner/i.test(j.error ?? "")) continue;
+      const tried = r.videoTried ?? [];
+      const next = CHAIN.find((c) => !tried.includes(c));
+      retriedRef.current.add(j.id);
+      if (next) void startVideo(r, r.result, next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobs, rows]);
+
   /** Turn the finished still (model already in the scene) straight into a video, in the background. */
-  async function startVideo(row: SceneRow, stillUrl: string) {
-    const eng = CREATE_ENGINES.find((e) => e.id === vidEngine) ?? CREATE_ENGINES[0];
+  async function startVideo(row: SceneRow, stillUrl: string, engineOverride?: string) {
+    const eng = CREATE_ENGINES.find((e) => e.id === (engineOverride ?? vidEngine)) ?? CREATE_ENGINES[0];
     const ratio = row.width && row.height ? row.width / row.height : 1.78;
     const aspect = ratio > 1.2 ? "16:9" : ratio < 0.83 ? "9:16" : "1:1";
     const prompt = `${row.action ? "The person is " + row.action.slice(0, 300) + ". " : ""}Natural, subtle, realistic motion: the person moves naturally and confidently in the scene with believable body movement, gentle smooth cinematic camera movement. Keep the person's face, hair, outfit and the whole scene exactly consistent with the opening frame. Photorealistic, no text.`;
@@ -347,7 +365,7 @@ export default function CastPage() {
       request: { path: "/api/video/create", body },
     };
     addJobs([job]);
-    patchRow(row.id, { videoJobId: id });
+    patchRow(row.id, { videoJobId: id, videoTried: [...(engineOverride ? row.videoTried ?? [] : []), eng.id] });
     try {
       const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
       track(id, r.statusUrl, r.responseUrl);
