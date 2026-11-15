@@ -130,7 +130,14 @@ function Select({ label, value, options, onChange }: { label: string; value: str
 }
 
 export default function CastPage() {
-  const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "smart casual", extra: "", plainBase: true });
+  const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "", extra: "", plainBase: true });
+  const [outfitChips, setOutfitChips] = useState<string[]>([]);
+  const [outfitText, setOutfitText] = useState("");
+  const setOutfit = (chips: string[], text: string) => {
+    setOutfitChips(chips);
+    setOutfitText(text);
+    setSpec((sp) => ({ ...sp, outfit: [...chips, text.trim()].filter(Boolean).join(", ") }));
+  };
   const [engine, setEngine] = useState<CastEngine>("seedream");
   const [opts, setOpts] = useState<{ url?: string; busy: boolean; error?: string; change?: string }[]>([]);
     const [saved, setSaved] = useState<SavedModel[]>([]);
@@ -199,7 +206,7 @@ export default function CastPage() {
 
   /** Retry a failed option with the description and extra text rewritten in plainer terms. */
   async function retryOption(i: number) {
-    const softSpec: ModelSpec = { ...spec, extra: await reword(spec.extra) };
+    const softSpec: ModelSpec = { ...spec, outfit: spec.outfit ? await reword(spec.outfit) : "", extra: await reword(spec.extra) };
     setOpts((o) => o.map((x, j) => (j === i ? { busy: true } : x)));
     try {
       const r = await api<{ url: string }>("/api/cast", { action: "design", engine, spec: softSpec, variant: i, softer: true });
@@ -347,17 +354,33 @@ export default function CastPage() {
       {/* 1. Design */}
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
         <h2 className="mb-3 text-sm font-semibold">1. Design a model</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           <Select label="Gender" value={spec.gender} options={OPTIONS.gender} onChange={(v) => setSpec({ ...spec, gender: v })} />
           <Select label="Age" value={spec.age} options={OPTIONS.age} onChange={(v) => setSpec({ ...spec, age: v })} />
           <Select label="Hair colour" value={spec.hairColour} options={OPTIONS.hairColour} onChange={(v) => setSpec({ ...spec, hairColour: v })} />
           <Select label="Hair style" value={spec.hairStyle} options={OPTIONS.hairStyle} onChange={(v) => setSpec({ ...spec, hairStyle: v })} />
           <Select label="Build" value={spec.build} options={OPTIONS.build} onChange={(v) => setSpec({ ...spec, build: v })} />
-          <Select label="Outfit style" value={spec.outfit} options={OPTIONS.outfit} onChange={(v) => setSpec({ ...spec, outfit: v })} />
+        </div>
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-neutral-600">Outfit (optional): tick any, type your own, or leave blank</p>
+          <div className="flex flex-wrap gap-2">
+            {["bikini", "swimwear", "beachwear", "smart casual", "elegant", "business", "athleisure", "relaxed linen", "summer dress", "evening wear"].map((c) => (
+              <label key={c} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${outfitChips.includes(c) ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300"}`}>
+                <input type="checkbox" className="hidden" checked={outfitChips.includes(c)} onChange={() => setOutfit(outfitChips.includes(c) ? outfitChips.filter((x) => x !== c) : [...outfitChips, c], outfitText)} />
+                {c}
+              </label>
+            ))}
+          </div>
+          <input
+            value={outfitText}
+            onChange={(e) => setOutfit(outfitChips, e.target.value)}
+            placeholder="Or describe your own, e.g. small olive triangle bikini, surf-brand editorial swim look"
+            className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          />
         </div>
         <label className="mt-3 flex items-center gap-2 text-xs text-neutral-600">
           <input type="checkbox" checked={spec.plainBase} onChange={(e) => setSpec({ ...spec, plainBase: e.target.checked })} />
-          <span>Plain base outfit (recommended): the model is made in a simple neutral top and shorts, so no jacket or clothes get carried into your scenes. Untick to design in the outfit style above.</span>
+          <span>Plain base outfit: used only when no outfit is ticked or typed above, so no clothes get carried into your scenes.</span>
         </label>
         <textarea
           value={spec.extra}
