@@ -5,6 +5,8 @@ import Link from "next/link";
 import { APP_NAME } from "@/lib/config";
 import { triggerDownload, urlToBlob } from "@/lib/image";
 import { CAST_ENGINES, CastEngine, ModelSpec, OPTIONS, softenText } from "@/lib/videoCast";
+import { CREATE_ENGINES, estimateCreateUsd } from "@/lib/videoCreate";
+import { useVideoStore, Job } from "@/lib/videoStore";
 
 interface SavedModel {
   id: string;
@@ -27,6 +29,7 @@ interface SceneRow {
   tweak: string;
   tweakAll: string;
   result?: string;
+  videoJobId?: string;
   busy: boolean;
   error?: string;
 }
@@ -153,6 +156,10 @@ export default function CastPage() {
   const [placeEngine, setPlaceEngine] = useState<CastEngine>("seedream");
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const addRef = useRef<HTMLInputElement | null>(null);
+  const { jobs, addJobs, track, patchJob } = useVideoStore();
+  const [makeVideo, setMakeVideo] = useState(true);
+  const [vidEngine, setVidEngine] = useState("seedance");
+  const [vidSecs, setVidSecs] = useState(5);
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
   const [looks, setLooks] = useState<string[]>([]);
@@ -313,8 +320,39 @@ export default function CastPage() {
         height: row.height,
       });
       patchRow(row.id, { busy: false, result: r.url });
+      if (makeVideo) void startVideo(row, r.url);
     } catch (e) {
       patchRow(row.id, { busy: false, error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
+  /** Turn the finished still (model already in the scene) straight into a video, in the background. */
+  async function startVideo(row: SceneRow, stillUrl: string) {
+    const eng = CREATE_ENGINES.find((e) => e.id === vidEngine) ?? CREATE_ENGINES[0];
+    const ratio = row.width && row.height ? row.width / row.height : 1.78;
+    const aspect = ratio > 1.2 ? "16:9" : ratio < 0.83 ? "9:16" : "1:1";
+    const prompt = `${row.action ? "The person is " + row.action.slice(0, 300) + ". " : ""}Natural, subtle, realistic motion: the person moves naturally and confidently in the scene with believable body movement, gentle smooth cinematic camera movement. Keep the person's face, hair, outfit and the whole scene exactly consistent with the opening frame. Photorealistic, no text.`;
+    const body = { engine: eng.id, prompt, refs: [{ url: stillUrl, label: "the opening frame" }], startFromFirst: true, secs: vidSecs, aspect, audio: false, final: false };
+    const id = `${Date.now()}-cast-${Math.random().toString(36).slice(2, 6)}`;
+    const job: Job = {
+      id,
+      kind: "create",
+      engine: eng.id,
+      title: `Model scene: ${(row.action || row.outfit || "scene").slice(0, 60)}`,
+      status: "waiting",
+      createdAt: Date.now(),
+      params: { prompt, refs: body.refs, startFromFirst: true, secs: vidSecs, aspect, audio: false, final: false },
+      retriesLeft: 0,
+      attempts: 1,
+      request: { path: "/api/video/create", body },
+    };
+    addJobs([job]);
+    patchRow(row.id, { videoJobId: id });
+    try {
+      const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
+      track(id, r.statusUrl, r.responseUrl);
+    } catch (e) {
+      patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
     }
   }
 
@@ -536,6 +574,23 @@ export default function CastPage() {
           </div>
         </div>
         {!active && <p className="mb-3 text-xs text-amber-700">Choose a model first.</p>}
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-neutral-50 p-3 text-xs">
+          <label className="flex items-center gap-2 font-medium">
+            <input type="checkbox" checked={makeVideo} onChange={(e) => setMakeVideo(e.target.checked)} />
+            Make the video straight after (no second step)
+          </label>
+          <select value={vidEngine} onChange={(e) => setVidEngine(e.target.value)} disabled={!makeVideo} className="rounded border border-neutral-300 px-2 py-1">
+            {CREATE_ENGINES.map((e) => (
+              <option key={e.id} value={e.id}>{e.label} (about ${estimateCreateUsd(e, vidSecs, false, false).toFixed(2)})</option>
+            ))}
+          </select>
+          <select value={vidSecs} onChange={(e) => setVidSecs(Number(e.target.value))} disabled={!makeVideo} className="rounded border border-neutral-300 px-2 py-1">
+            {[3, 5, 8, 10, 15].map((n) => (
+              <option key={n} value={n}>{n} seconds</option>
+            ))}
+          </select>
+          <span className="text-neutral-400">Upload a still or a video. For a video the model is placed into its first frame and the video is made from that. Scenes run side by side.</span>
+        </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {rows.map((r) => (
             <div key={r.id} className="rounded-lg border border-neutral-200 p-3">
@@ -564,7 +619,7 @@ export default function CastPage() {
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <button onClick={() => void place(r)} disabled={!active || !r.sceneUrl || r.busy} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">
-                  {r.busy ? "Working…" : `Place model (${money(placeEng.cost)})`}
+                  {r.busy ? "Working…" : makeVideo ? `Place model + make video (${money(placeEng.cost)} + video)` : `Place model (${money(placeEng.cost)})`}
                 </button>
                 {rows.length > 1 && <button onClick={() => setRows((x) => x.filter((y) => y.id !== r.id))} className="text-xs text-neutral-400 underline">Remove</button>}
               </div>
@@ -593,7 +648,26 @@ export default function CastPage() {
                     <input value={r.tweak} onChange={(e) => patchRow(r.id, { tweak: e.target.value })} placeholder="Edit this image, e.g. add a sarong, make the dress red" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs" />
                     <button onClick={() => void editResult(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40">Edit this ({money(placeEng.cost)})</button>
                     <button onClick={() => void place(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-40">Redo from scratch</button>
+                    <button onClick={() => void startVideo(r, r.result!)} className="rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white">Make video from this image</button>
                   </div>
+                  {(() => {
+                    const j = r.videoJobId ? jobs.find((x) => x.id === r.videoJobId) : undefined;
+                    if (!j) return null;
+                    return (
+                      <div className="mt-3 rounded-lg border border-neutral-200 p-2">
+                        {j.status === "done" && j.videoUrl ? (
+                          <>
+                            <video src={j.videoUrl} controls loop muted className="w-full rounded bg-black" />
+                            <a href={j.videoUrl} download target="_blank" rel="noreferrer" className="mt-2 inline-block rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">Download video</a>
+                          </>
+                        ) : j.status === "failed" ? (
+                          <p className="text-xs text-red-600">{j.error}</p>
+                        ) : (
+                          <p className="py-6 text-center text-xs text-neutral-500">{j.note ?? (j.status === "queued" ? "Video queued…" : j.status === "running" ? "Making the video… (usually 2-6 minutes, you can keep working)" : "Starting the video…")}</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -602,7 +676,7 @@ export default function CastPage() {
         {rows.length < 6 && (
           <button onClick={() => setRows((r) => [...r, { id: `r${Date.now()}`, outfit: "", action: "", tweak: "", tweakAll: "", busy: false }])} className="mt-3 rounded border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-50">+ Add another scene</button>
         )}
-        <p className="mt-3 text-xs text-neutral-400">Download the stills and use them as the opening frame in the Create tab (Kling or Seedance) to animate them.</p>
+        <p className="mt-3 text-xs text-neutral-400">Videos also appear in the Video tab under Create, where you can edit them.</p>
       </section>
     </main>
   );
