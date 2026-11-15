@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
         hairColour: str(s.hairColour, 30) || "brunette",
         hairStyle: str(s.hairStyle, 30) || "long",
         build: str(s.build, 20) || "slim",
-        outfit: str(s.outfit, 30) || "smart casual",
+        outfit: str(s.outfit, 300),
         extra: str(s.extra, 400),
         plainBase: s.plainBase !== false,
       };
