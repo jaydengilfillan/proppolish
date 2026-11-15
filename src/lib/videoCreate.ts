@@ -4,9 +4,9 @@
  * turns that into each engine's payload so the user never writes @Image tags.
  */
 
-export type CreateEngineId = "kling4" | "kling3pro" | "kling3std" | "klingpro" | "klingstd" | "seedance" | "seedance_i2v";
+export type CreateEngineId = "kling4" | "kling3pro" | "kling3std" | "klingpro" | "klingstd" | "seedance" | "seedance_i2v" | "seedance15";
 /** v3 = Kling 3.0 image-to-video (start image + elements), v4 = Kling 4.0 reference-to-video, omni = Kling O3 reference-to-video. */
-export type CreateKind = "v3" | "v4" | "omni" | "seedance" | "seedance_i2v";
+export type CreateKind = "v3" | "v4" | "omni" | "seedance" | "seedance_i2v" | "seedance15";
 export type Aspect = "16:9" | "9:16" | "1:1";
 
 export interface CreateEngine {
@@ -73,6 +73,15 @@ export const CREATE_ENGINES: CreateEngine[] = [
     model: "bytedance/seedance-2.0/reference-to-video",
     minSecs: 4,
     maxSecs: 15,
+  },
+  {
+    id: "seedance15",
+    kind: "seedance15",
+    label: "Seedance 1.5 Pro (image to video, safety filter off)",
+    blurb: "Older Seedance with the safety checker switched off. Same one your Lifestyle Shots app uses. 4-12s.",
+    model: "fal-ai/bytedance/seedance/v1.5/pro/image-to-video",
+    minSecs: 4,
+    maxSecs: 12,
   },
   {
     id: "seedance_i2v",
@@ -176,6 +185,7 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
         lines.push(i === 0 ? `The opening frame is ${label}.` : `@Element${i} is ${label}.`);
         break;
       case "seedance_i2v":
+      case "seedance15":
         break;
       case "seedance":
         lines.push(input.startFromFirst && i === 0 ? `@Image1 is ${label} and is the exact opening frame of the video.` : `@Image${i + 1} is ${label}.`);
@@ -200,7 +210,7 @@ export function composePrompt(input: CreateInput, engine: CreateEngine): string 
 
 /** Engines that can't run without at least one image. */
 export function needsImage(engine: CreateEngine): boolean {
-  return engine.kind === "v3" || engine.kind === "seedance_i2v";
+  return engine.kind === "v3" || engine.kind === "seedance_i2v" || engine.kind === "seedance15";
 }
 
 function buildCreatePayloadInner(engine: CreateEngine, input: CreateInput): Record<string, unknown> {
@@ -217,6 +227,18 @@ function buildCreatePayloadInner(engine: CreateEngine, input: CreateInput): Reco
         aspect_ratio: input.aspect,
         generate_audio: input.audio,
       };
+    case "seedance15": {
+      if (urls.length === 0) throw new Error(`${engine.label} needs an image (it becomes the opening frame).`);
+      return {
+        prompt,
+        image_url: urls[0],
+        duration: String(secs),
+        resolution: input.final ? "1080p" : "720p",
+        aspect_ratio: ["16:9", "9:16", "1:1"].includes(input.aspect) ? input.aspect : "auto",
+        camera_fixed: false,
+        enable_safety_checker: false,
+      };
+    }
     case "seedance_i2v": {
       if (urls.length === 0) throw new Error(`${engine.label} needs an image (it becomes the opening frame).`);
       return {
@@ -280,6 +302,10 @@ export function estimateCreateUsd(engine: CreateEngine, secs: number, final: boo
     case "kling3std":
     case "klingstd":
       return s * (audio ? 0.168 : 0.126);
+    case "seedance15": {
+      const w = final ? 1920 : 1280, h = final ? 1080 : 720;
+      return ((w * h * 24 * s) / 1024 / 1e6) * 2.5;
+    }
     case "seedance_i2v":
     case "seedance": {
       const w = final ? 1920 : 1280, h = final ? 1080 : 720;
