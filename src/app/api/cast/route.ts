@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FalError, falEdit, nearestFalAspectRatio } from "@/lib/fal";
-import { CastEngine, ModelSpec, designPrompt, placePrompt, tweakModelPrompt } from "@/lib/videoCast";
+import { CastEngine, ModelSpec, designPrompt, placePrompt, tweakModelPrompt, editScenePrompt } from "@/lib/videoCast";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
         build: str(s.build, 20) || "slim",
         outfit: str(s.outfit, 30) || "smart casual",
         extra: str(s.extra, 400),
+        plainBase: s.plainBase !== false,
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
@@ -59,6 +60,15 @@ export async function POST(req: NextRequest) {
         useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
+    } else if (body.action === "editscene") {
+      if (!isUrl(body.imageUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing image or change." }, { status: 400 });
+      const prompt = editScenePrompt(str(body.change, 300));
+      const w = typeof body.width === "number" ? body.width : undefined;
+      const h = typeof body.height === "number" ? body.height : undefined;
+      url =
+        useEngine === "seedream"
+          ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.imageUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
+          : await falEdit({ prompt, imageUrls: [body.imageUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else if (body.action === "place") {
       if (!isUrl(body.sceneUrl) || !isUrl(body.modelUrl)) return NextResponse.json({ error: "Missing scene or model image." }, { status: 400 });
       const prompt = placePrompt(str(body.outfit, 300), str(body.actionText, 300), str(body.tweak, 300));
