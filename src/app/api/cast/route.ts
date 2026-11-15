@@ -26,6 +26,41 @@ async function falRun(model: string, input: Record<string, unknown>): Promise<st
 const grokEdit = (prompt: string, urls: string[], aspect?: string) =>
   falRun("xai/grok-imagine-image/edit", { prompt, image_urls: urls.slice(0, 3), num_images: 1, resolution: "2k", output_format: "jpeg", aspect_ratio: aspect && /^(2:1|16:9|4:3|3:2|1:1|2:3|3:4|9:16|1:2)$/.test(aspect) ? aspect : "auto", enable_safety_checker: false });
 
+/** xAI Grok Imagine called directly on api.x.ai (not through fal). Needs XAI_API_KEY. Result is re-hosted on fal storage so later steps can reuse it. */
+async function xaiRun(prompt: string, urls: string[], aspect?: string): Promise<string> {
+  const xkey = process.env.XAI_API_KEY;
+  if (!xkey) throw new FalError(500, "XAI_API_KEY is not set on the server (add it in Vercel, then redeploy).");
+  const ar = aspect && /^(1:1|3:4|4:3|9:16|16:9|2:3|3:2|1:2|2:1)$/.test(aspect) ? aspect : "auto";
+  const edit = urls.length > 0;
+  const text = urls.length > 1 ? prompt.replace(/\b[Ii]mage 1\b/g, "<IMAGE_0>").replace(/\b[Ii]mage 2\b/g, "<IMAGE_1>") : prompt;
+  const reqBody: Record<string, unknown> = { model: "grok-imagine-image-2.0", prompt: text, n: 1, resolution: "2k", aspect_ratio: ar, response_format: "b64_json" };
+  if (urls.length === 1) reqBody.image = { url: urls[0], type: "image_url" };
+  if (urls.length > 1) reqBody.images = urls.slice(0, 3).map((u) => ({ url: u, type: "image_url" }));
+  const resp = await fetch(edit ? "https://api.x.ai/v1/images/edits" : "https://api.x.ai/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${xkey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(reqBody),
+  });
+  const raw = await resp.text();
+  if (!resp.ok) throw new FalError(resp.status, `xai (${resp.status}): ${raw.slice(0, 300)}`);
+  const json = JSON.parse(raw) as { data?: { b64_json?: string; mime_type?: string }[] };
+  const img = json.data?.[0];
+  if (!img?.b64_json) throw new FalError(422, "xAI returned no image (blocked or empty).");
+  const fkey = process.env.FAL_KEY;
+  if (!fkey) throw new FalError(500, "FAL_KEY is not set on the server.");
+  const ct = img.mime_type || "image/jpeg";
+  const init = await fetch("https://rest.fal.ai/storage/upload/initiate?storage_type=fal-cdn-v3", {
+    method: "POST",
+    headers: { Authorization: `Key ${fkey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ content_type: ct, file_name: `grok-${Date.now()}.${ct.includes("png") ? "png" : "jpg"}` }),
+  });
+  if (!init.ok) throw new FalError(502, `fal upload init failed (${init.status}).`);
+  const { upload_url, file_url } = (await init.json()) as { upload_url: string; file_url: string };
+  const put = await fetch(upload_url, { method: "PUT", body: Buffer.from(img.b64_json, "base64"), headers: { "Content-Type": ct } });
+  if (!put.ok) throw new FalError(502, `fal upload failed (${put.status}).`);
+  return file_url;
+}
+
 /** Google Gemini image model called directly (not through fal). Needs GOOGLE_API_KEY on the server. Result is hosted on fal storage so the rest of the app can reuse the URL. */
 async function geminiRun(prompt: string, urls: string[], aspect?: string): Promise<string> {
   const gkey = process.env.GOOGLE_API_KEY;
@@ -76,7 +111,7 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : "nano";
+  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "xai" ? "xai" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
   for (let attempt = 0; attempt < 3; attempt++) {
   try {
@@ -95,7 +130,9 @@ export async function POST(req: NextRequest) {
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
-        useEngine === "grok"
+        useEngine === "xai"
+          ? await xaiRun(prompt, [], "3:4")
+          : useEngine === "grok"
           ? await falRun("xai/grok-imagine-image", { prompt, aspect_ratio: "3:4", resolution: "2k", output_format: "jpeg", num_images: 1, enable_safety_checker: false })
           : useEngine === "gemini"
           ? await geminiRun(prompt, [], "3:4")
@@ -106,7 +143,9 @@ export async function POST(req: NextRequest) {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       url =
-        useEngine === "grok"
+        useEngine === "xai"
+          ? await xaiRun(prompt, [body.modelUrl], "3:4")
+          : useEngine === "grok"
           ? await grokEdit(prompt, [body.modelUrl], "3:4")
           : useEngine === "gemini"
           ? await geminiRun(prompt, [body.modelUrl], "3:4")
@@ -119,7 +158,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "grok"
+        useEngine === "xai"
+          ? await xaiRun(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "grok"
           ? await grokEdit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
           : useEngine === "gemini"
           ? await geminiRun(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
@@ -132,7 +173,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "grok"
+        useEngine === "xai"
+          ? await xaiRun(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "grok"
           ? await grokEdit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
           : useEngine === "gemini"
           ? await geminiRun(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
