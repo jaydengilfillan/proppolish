@@ -116,7 +116,7 @@ function Select({ label, value, options, onChange }: { label: string; value: str
 }
 
 export default function CastPage() {
-  const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "smart casual", extra: "" });
+  const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "smart casual", extra: "", plainBase: true });
   const [engine, setEngine] = useState<CastEngine>("nano");
   const [opts, setOpts] = useState<{ url?: string; busy: boolean; error?: string }[]>([]);
   const [change, setChange] = useState("");
@@ -223,6 +223,19 @@ export default function CastPage() {
     }
   }
 
+  /** Edit the finished image itself (e.g. "add a sarong"): quick, keeps the person and scene. */
+  async function editResult(row: SceneRow, text: string) {
+    const t = text.trim();
+    if (!row.result || !t) return;
+    patchRow(row.id, { busy: true, error: undefined, tweak: "" });
+    try {
+      const r = await api<{ url: string }>("/api/cast", { action: "editscene", engine: placeEngine, imageUrl: row.result, change: t, width: row.width, height: row.height });
+      patchRow(row.id, { busy: false, result: r.url });
+    } catch (e) {
+      patchRow(row.id, { busy: false, error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
   async function download(url: string, name: string) {
     try {
       const o = URL.createObjectURL(await urlToBlob(url));
@@ -254,6 +267,10 @@ export default function CastPage() {
           <Select label="Build" value={spec.build} options={OPTIONS.build} onChange={(v) => setSpec({ ...spec, build: v })} />
           <Select label="Outfit style" value={spec.outfit} options={OPTIONS.outfit} onChange={(v) => setSpec({ ...spec, outfit: v })} />
         </div>
+        <label className="mt-3 flex items-center gap-2 text-xs text-neutral-600">
+          <input type="checkbox" checked={spec.plainBase} onChange={(e) => setSpec({ ...spec, plainBase: e.target.checked })} />
+          <span>Plain base outfit (recommended): the model is made in a simple neutral top and shorts, so no jacket or clothes get carried into your scenes. Untick to design in the outfit style above.</span>
+        </label>
         <textarea
           value={spec.extra}
           onChange={(e) => setSpec({ ...spec, extra: e.target.value })}
@@ -389,8 +406,9 @@ export default function CastPage() {
                   <img src={r.result} alt="Result" className="w-full rounded" />
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <button onClick={() => void download(r.result!, `model-scene-${r.id}.png`)} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">Download</button>
-                    <input value={r.tweak} onChange={(e) => patchRow(r.id, { tweak: e.target.value })} placeholder="Change something, e.g. make the dress red" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs" />
-                    <button onClick={() => void place(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40">Redo ({money(placeEng.cost)})</button>
+                    <input value={r.tweak} onChange={(e) => patchRow(r.id, { tweak: e.target.value })} placeholder="Edit this image, e.g. add a sarong, make the dress red" className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-xs" />
+                    <button onClick={() => void editResult(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-40">Edit this ({money(placeEng.cost)})</button>
+                    <button onClick={() => void place(r, r.tweak)} disabled={r.busy || !r.tweak.trim()} className="rounded border border-neutral-300 px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-50 disabled:opacity-40">Redo from scratch</button>
                   </div>
                 </div>
               )}
