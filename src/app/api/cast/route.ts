@@ -98,9 +98,9 @@ export async function POST(req: NextRequest) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
-    if (blockedByFilter && attempt < 2 && useEngine !== "flux") {
+    if (blockedByFilter && attempt === 0 && useEngine === "seedream") {
       // Quiet automatic retry. If Seedream blocked it, fall back to Nano Banana Pro (loosest setting) so the shot is never held up.
-      useEngine = useEngine === "seedream" ? "nano" : "flux";
+      useEngine = "nano";
       continue;
     }
     return NextResponse.json(
