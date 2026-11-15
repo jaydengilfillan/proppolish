@@ -23,6 +23,10 @@ async function falRun(model: string, input: Record<string, unknown>): Promise<st
   return url;
 }
 
+const FLUX_BASE = { safety_tolerance: "6", output_format: "jpeg", num_images: 1 };
+const fluxEdit = (prompt: string, urls: string[], aspect?: string) =>
+  falRun("fal-ai/flux-pro/kontext/max/multi", { ...FLUX_BASE, prompt, image_urls: urls, ...(aspect ? { aspect_ratio: aspect } : {}) });
+
 /** Design a model (text to image) or place a chosen model into a scene (edit). */
 export async function POST(req: NextRequest) {
   let body: Record<string, unknown>;
@@ -31,9 +35,9 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
-  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : "nano";
+  let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "flux" ? "flux" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image/i;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
   try {
     let url: string;
     if (body.action === "design") {
@@ -50,14 +54,18 @@ export async function POST(req: NextRequest) {
       };
       const prompt = designPrompt(spec, typeof body.variant === "number" ? body.variant : 0);
       url =
-        useEngine === "seedream"
+        useEngine === "flux"
+          ? await falRun("fal-ai/flux-pro/kontext/max/text-to-image", { ...FLUX_BASE, prompt, aspect_ratio: "3:4" })
+          : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/text-to-image", { prompt, image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falRun("fal-ai/nano-banana-pro", { prompt, aspect_ratio: "3:4", resolution: "2K", num_images: 1, safety_tolerance: "6" });
     } else if (body.action === "tweak") {
       if (!isUrl(body.modelUrl) || !str(body.change, 300).trim()) return NextResponse.json({ error: "Missing model image or change." }, { status: 400 });
       const prompt = tweakModelPrompt(str(body.change, 300), (body.softer === true ? "soft" : str(body.age, 40)));
       url =
-        useEngine === "seedream"
+        useEngine === "flux"
+          ? await fluxEdit(prompt, [body.modelUrl], "3:4")
+          : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.modelUrl], image_size: "portrait_4_3", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.modelUrl], resolution: "2K", aspectRatio: "3:4", safetyTolerance: "6" });
     } else if (body.action === "editscene") {
@@ -66,7 +74,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "seedream"
+        useEngine === "flux"
+          ? await fluxEdit(prompt, [body.imageUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.imageUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.imageUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else if (body.action === "place") {
@@ -75,7 +85,9 @@ export async function POST(req: NextRequest) {
       const w = typeof body.width === "number" ? body.width : undefined;
       const h = typeof body.height === "number" ? body.height : undefined;
       url =
-        useEngine === "seedream"
+        useEngine === "flux"
+          ? await fluxEdit(prompt, [body.sceneUrl, body.modelUrl], nearestFalAspectRatio(w, h))
+          : useEngine === "seedream"
           ? await falRun("fal-ai/bytedance/seedream/v4.5/edit", { prompt, image_urls: [body.sceneUrl, body.modelUrl], image_size: "auto_2K", num_images: 1, enable_safety_checker: false })
           : await falEdit({ prompt, imageUrls: [body.sceneUrl, body.modelUrl], resolution: "2K", aspectRatio: nearestFalAspectRatio(w, h), safetyTolerance: "6" });
     } else {
@@ -86,9 +98,9 @@ export async function POST(req: NextRequest) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
-    if (blockedByFilter && attempt === 0) {
+    if (blockedByFilter && attempt < 2 && useEngine !== "flux") {
       // Quiet automatic retry. If Seedream blocked it, fall back to Nano Banana Pro (loosest setting) so the shot is never held up.
-      useEngine = "nano";
+      useEngine = useEngine === "seedream" ? "nano" : "flux";
       continue;
     }
     return NextResponse.json(
