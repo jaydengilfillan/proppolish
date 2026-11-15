@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
   }
   let useEngine: CastEngine = body.engine === "seedream" ? "seedream" : body.engine === "gemini" ? "gemini" : body.engine === "grok" ? "grok" : body.engine === "flux2" ? "flux2" : body.engine === "xai" ? "xai" : "nano";
   const BLOCK = /content.?polic|safety|flagged|nsfw|moderat|sensitive|no image|could not be processed|contained material|422/i;
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
   try {
     let url: string;
     if (body.action === "design") {
@@ -204,10 +204,15 @@ export async function POST(req: NextRequest) {
     const status = err instanceof FalError ? err.status : 500;
     const msg = err instanceof Error ? err.message : "Failed.";
     const blockedByFilter = BLOCK.test(msg);
-    if (blockedByFilter && attempt < 3 && (useEngine === "seedream" || useEngine === "nano" || useEngine === "flux2")) {
-      // Quiet automatic retry. If Seedream blocked it, fall back to Nano Banana Pro (loosest setting) so the shot is never held up.
-      useEngine = useEngine === "seedream" ? "nano" : useEngine === "nano" ? "flux2" : "grok";
-      continue;
+    const noKey = /is not set on the server/i.test(msg);
+    if ((blockedByFilter || noKey) && attempt < 5) {
+      // Quiet automatic retry down the chain; the last two steps run OFF fal (xAI direct, Gemini direct) when their keys are set.
+      const next: Record<string, CastEngine> = { seedream: "nano", nano: "flux2", flux2: "grok", grok: "xai", xai: "gemini" };
+      const n = next[useEngine];
+      if (n) {
+        useEngine = n;
+        continue;
+      }
     }
     return NextResponse.json(
       { error: blockedByFilter ? `The image filter blocked this (${msg.slice(0, 120)}). Try again, switch to Nano Banana Pro, or reword the outfit (for example "one-piece swimsuit", "beach cover-up", "resort wear").` : msg },
