@@ -86,11 +86,12 @@ export function editScenePrompt(change: string, age?: string): string {
 }
 
 export function placePrompt(outfit: string, action: string, tweak?: string, age?: string): string {
-  const dress = outfit
-    ? `Dress them ONLY in this outfit: ${outfit.slice(0, 300)}, styled stylishly. `
-    : "Choose a stylish outfit that suits this scene and what they are doing. ";
+  const hasOutfit = outfit.trim().length > 0;
   const swim = SWIM.test(outfit) || SWIM.test(action) || SWIM.test(tweak ?? "");
-  return `${swim ? swimRule(age) + " " : ""}Image 1 is the scene and image 2 is the model reference. Place the same person from image 2 into the scene from image 1. Use image 2 ONLY for the person's identity: face, hair, age, skin tone and build. Do NOT copy the clothing, shoes, accessories, pose or plain studio background from image 2: fully replace their clothing, with nothing left over from image 2. ${dress}The outfit, footwear and accessories must make sense for the location and activity in the scene (for example beachwear and bare feet on a beach or at a pool, no jackets, trousers or loafers there). ${action ? "They are " + action.slice(0, 300) + ". " : ""}${ALWAYS} Match the scene's lighting, colour, perspective, scale, shadows and reflections so they look truly photographed there, with natural contact with the ground and objects. Do not change the scene itself: keep the architecture, objects, camera angle, framing and crop exactly as in image 1, and add only this one person. Photorealistic, sharp, no text.${tweak ? " Adjustment requested, apply it clearly: " + tweak.slice(0, 300) + "." : ""}`;
+  const identity = hasOutfit
+    ? `Use image 2 ONLY for the person's identity: face, hair, age, skin tone and build. Do NOT copy the clothing, shoes, accessories, pose or plain studio background from image 2: fully replace their clothing with this outfit and nothing else: ${outfit.slice(0, 300)}, styled stylishly. The outfit, footwear and accessories must make sense for the location and activity in the scene. `
+    : "STRICT RULE: keep the person EXACTLY as they appear in image 2, with the exact same outfit: the same garments, cut, fit, colours, patterns, fabric, footwear and accessories, plus the same face, hair, hair styling, make-up, skin tone, tan and body. Do not change, swap, add or remove any item of clothing, do not add any layer, jacket or cover-up, and do not change the hair or styling. Only change their pose and position to suit the scene. ";
+  return `${hasOutfit && swim ? swimRule(age) + " " : ""}Image 1 is the scene and image 2 is the model reference. Place the same person from image 2 into the scene from image 1. ${identity}${action ? "They are " + action.slice(0, 300) + ". " : ""}${hasOutfit ? ALWAYS + " " : "Keep them as attractive and polished as in image 2. "}Match the scene's lighting, colour, perspective, scale, shadows and reflections so they look truly photographed there, with natural contact with the ground and objects. Do not change the scene itself: keep the architecture, objects, camera angle, framing and crop exactly as in image 1, and add only this one person. Photorealistic, sharp, no text.${tweak ? " Adjustment requested, apply it clearly: " + tweak.slice(0, 300) + "." : ""}`;
 }
 
 /**
