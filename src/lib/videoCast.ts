@@ -37,11 +37,11 @@ export const OPTIONS = {
 const ALWAYS =
   "The person is a strikingly attractive adult with a confident, warm, magnetic expression, wearing fashionable, flattering clothes. High-end lifestyle campaign casting, not corporate or conservative.";
 
-const GLAM_F = "Proper Gold Coast glamour, a head-turning high-fashion beauty: glossy, freshly styled and blow-dried hair with volume and shine (never messy, flat or unkempt), full polished make-up with defined brows, lashes and glossy lips, flawless glowing bronzed skin, an hourglass figure with a toned waist, curvy hips and a full, shapely bust, long toned legs, confident model pose. Not average, not girl-next-door, not a librarian or office look.";
+const GLAM_F = "Proper Gold Coast beauty, effortlessly gorgeous and natural: healthy glowing sun-kissed skin that looks flawless, soft natural-looking make-up or none at all (fresh, minimal, never heavy, never over-done, no contouring), beautiful loose styled hair with natural shine, a fuller, shapely bust, a lean slim waist, slim narrow hips and slim legs (not curvy hips, not a big backside, not exaggerated), relaxed confident model pose. Realistic and believable, not an influencer or glamour-model look, not plastic or over-filtered, not average, not a librarian or office look.";
 const GLAM_M = "Proper Gold Coast glamour: a strikingly handsome, athletic and well-built man with broad shoulders and defined abs, sharp jawline, sun-bronzed skin, thick styled hair with product, confident model pose. Not average, not corporate.";
 const FEMALE_AGE: Record<string, string> = {
-  "40s": "Glamorous, strikingly beautiful, youthful and fit woman in her 40s: glossy blow-dried styled hair, full polished make-up, flawless glowing bronzed skin, toned hourglass figure with a full shapely bust, confident model pose. Not average, not frumpy.",
-  "50s": "Elegant, glamorous, striking woman in her 50s who looks incredible: polished styled hair, refined make-up, glowing bronzed skin, fit toned figure, expensive-looking resort style, radiant confidence. Not average, not frumpy.",
+  "40s": "Glamorous, strikingly beautiful, youthful and fit woman in her 40s: beautiful styled hair, soft natural-looking make-up (never heavy or over-done), flawless glowing bronzed skin, fit toned slim figure with a fuller shapely bust, slim hips and legs, confident model pose. Realistic, not plastic, not average, not frumpy.",
+  "50s": "Elegant, glamorous, striking woman in her 50s who looks incredible: polished styled hair, soft natural make-up, glowing bronzed skin, fit toned slim figure with a fuller bust, expensive-looking resort style, radiant confidence. Not average, not frumpy.",
   "60s": "Stunning, elegant, wealthy-looking woman in her 60s: silver or immaculately styled hair, refined make-up, glowing tan, fit toned figure, expensive jewellery, radiant confidence. Not average, not frumpy.",
 };
 const MALE_AGE: Record<string, string> = {
