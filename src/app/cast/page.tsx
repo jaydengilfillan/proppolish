@@ -133,6 +133,13 @@ export default function CastPage() {
   const [spec, setSpec] = useState<ModelSpec>({ gender: "woman", age: "30s", hairColour: "brunette", hairStyle: "long", build: "slim", outfit: "", extra: "", plainBase: true });
   const [outfitChips, setOutfitChips] = useState<string[]>([]);
   const [outfitText, setOutfitText] = useState("");
+  const [activityChips, setActivityChips] = useState<string[]>([]);
+  const [activityText, setActivityText] = useState("");
+  const setActivity = (chips: string[], text: string) => {
+    setActivityChips(chips);
+    setActivityText(text);
+    setSpec((sp) => ({ ...sp, activity: [...chips, text.trim()].filter(Boolean).join(", ") }));
+  };
   const setOutfit = (chips: string[], text: string) => {
     setOutfitChips(chips);
     setOutfitText(text);
@@ -375,6 +382,23 @@ export default function CastPage() {
             value={outfitText}
             onChange={(e) => setOutfit(outfitChips, e.target.value)}
             placeholder="Or describe your own, e.g. small olive triangle bikini, surf-brand editorial swim look"
+            className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
+          />
+        </div>
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-neutral-600">Activity (optional): what they are doing, with props</p>
+          <div className="flex flex-wrap gap-2">
+            {["surfing, holding a surfboard", "cooking, holding a pan and chef's utensils", "walking a happy dog on a lead", "mid workout, holding a water bottle and towel", "holding house keys, welcoming and smiling"].map((c) => (
+              <label key={c} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${activityChips.includes(c) ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300"}`}>
+                <input type="checkbox" className="hidden" checked={activityChips.includes(c)} onChange={() => setActivity(activityChips.includes(c) ? activityChips.filter((x) => x !== c) : [...activityChips, c], activityText)} />
+                {c}
+              </label>
+            ))}
+          </div>
+          <input
+            value={activityText}
+            onChange={(e) => setActivity(activityChips, e.target.value)}
+            placeholder="Or your own, e.g. carrying a tray of cocktails, sitting at a laptop on the deck"
             className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
           />
         </div>
