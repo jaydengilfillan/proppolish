@@ -609,7 +609,7 @@ export default function CastPage() {
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <input value={r.action} onChange={(e) => patchRow(r.id, { action: e.target.value })} placeholder="What are they doing? e.g. walking in through the front door" className="rounded border border-neutral-300 px-2 py-1.5 text-xs" />
-                  <input value={r.outfit} onChange={(e) => patchRow(r.id, { outfit: e.target.value })} placeholder="Outfit, e.g. a stylish summer dress" className="rounded border border-neutral-300 px-2 py-1.5 text-xs" />
+                  <input value={r.outfit} onChange={(e) => patchRow(r.id, { outfit: e.target.value })} placeholder="Leave BLANK to keep the model's exact outfit, or type a different one" className="rounded border border-neutral-300 px-2 py-1.5 text-xs" />
                   <div className="flex flex-wrap gap-1">
                     {OUTFIT_CHIPS.map((c) => (
                       <button key={c} onClick={() => patchRow(r.id, { outfit: c })} className="rounded-full border border-neutral-200 px-2 py-0.5 text-[11px] text-neutral-600 hover:border-neutral-500">{c}</button>
