@@ -30,7 +30,7 @@ export const OPTIONS = {
 
 /** Every model is an adult and always attractive, well groomed and stylishly dressed. */
 const ALWAYS =
-  "The person is an attractive, well-groomed adult with a confident, warm expression and a great look, always dressed in stylish, fashionable clothes that fit well and suit them. Premium lifestyle and real estate campaign casting, polished and tasteful, never plain or unstylish.";
+  "The person is a good-looking, well-groomed adult with a confident, warm expression, dressed in stylish, fashionable clothes. Polished, tasteful lifestyle and real estate campaign casting.";
 
 export function designPrompt(spec: ModelSpec, variant: number): string {
   const v = ["", " Give this option a distinctly different face and look from the others.", " Give this option another distinctly different face, bone structure and hairstyle detail from the others."][variant % 3];
@@ -42,5 +42,5 @@ export function tweakModelPrompt(change: string): string {
 }
 
 export function placePrompt(outfit: string, action: string, tweak?: string): string {
-  return `Image 1 is the scene and image 2 is the model. Place the exact same person from image 2 into the scene from image 1: identical face, hair, age and body, recognisably the same person. ${action ? "They are " + action.slice(0, 300) + ". " : ""}${outfit ? "They are wearing " + outfit.slice(0, 300) + ", styled stylishly and flattering. " : "Keep a stylish, flattering outfit. "}${ALWAYS} Match the scene's lighting, colour, perspective, scale, shadows and reflections so they look truly photographed there, with natural contact with the ground and any objects. Do not change the scene itself: keep the architecture, objects, camera angle, framing and crop exactly as in image 1, and add only this one person. Photorealistic, sharp, no text.${tweak ? " Adjustment requested, apply it clearly: " + tweak.slice(0, 300) + "." : ""}`;
+  return `Image 1 is the scene and image 2 is the model. Place the exact same person from image 2 into the scene from image 1: identical face, hair, age and body, recognisably the same person. ${action ? "They are " + action.slice(0, 300) + ". " : ""}${outfit ? "They are wearing " + outfit.slice(0, 300) + ", styled stylishly. " : "Keep a stylish outfit. "}${ALWAYS} Match the scene's lighting, colour, perspective, scale, shadows and reflections so they look truly photographed there, with natural contact with the ground and any objects. Do not change the scene itself: keep the architecture, objects, camera angle, framing and crop exactly as in image 1, and add only this one person. Photorealistic, sharp, no text.${tweak ? " Adjustment requested, apply it clearly: " + tweak.slice(0, 300) + "." : ""}`;
 }
