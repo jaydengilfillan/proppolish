@@ -170,6 +170,10 @@ export default function CastPage() {
   const [bkBusy, setBkBusy] = useState(false);
   const [bkError, setBkError] = useState("");
   const [bkJobs, setBkJobs] = useState<string[]>([]);
+  const [bkPlace, setBkPlace] = useState(true);
+  const [bkHasModel, setBkHasModel] = useState(false);
+  const [bkAction, setBkAction] = useState("");
+  const [bkStills, setBkStills] = useState<Record<string, string>>({});
   const [addBusy, setAddBusy] = useState(false);
   const [addError, setAddError] = useState("");
   const [looks, setLooks] = useState<string[]>([]);
@@ -361,6 +365,7 @@ export default function CastPage() {
       const sc = await sceneFromFile(file);
       setBkUrl(await uploadToFal(sc.blob, `backup-${Date.now()}.jpg`));
       setBkPreview(sc.preview);
+      setBkHasModel(false);
       setBkAspect(sc.w / sc.h > 1.2 ? "16:9" : sc.w / sc.h < 0.83 ? "9:16" : "1:1");
     } catch (e) {
       setBkError(e instanceof Error ? e.message : "Upload failed");
@@ -373,16 +378,24 @@ export default function CastPage() {
   async function startBackup() {
     if (!bkUrl || !bkPrompt.trim()) return;
     const eng = CREATE_ENGINES.find((e) => e.id === bkEngine) ?? CREATE_ENGINES[0];
-    const body = { engine: eng.id, prompt: bkPrompt.trim(), refs: [{ url: bkUrl, label: "the opening frame" }], startFromFirst: true, secs: bkSecs, aspect: bkAspect, audio: false, final: false };
     const id = `${Date.now()}-backup-${Math.random().toString(36).slice(2, 6)}`;
-    const job: Job = { id, kind: "create", engine: eng.id, title: `Backup: ${bkPrompt.trim().slice(0, 60)}`, status: "waiting", createdAt: Date.now(), params: { prompt: bkPrompt.trim(), refs: body.refs, startFromFirst: true, secs: bkSecs, aspect: bkAspect, audio: false, final: false }, retriesLeft: 0, attempts: 1, request: { path: "/api/video/create", body } };
+    const refsStill = (u: string) => [{ url: u, label: "the opening frame" }];
+    const job: Job = { id, kind: "create", engine: eng.id, title: `Backup: ${bkPrompt.trim().slice(0, 60)}`, status: "waiting", createdAt: Date.now(), note: bkPlace && active && !bkHasModel ? "Placing your model into the still first…" : undefined, retriesLeft: 0, attempts: 1 };
     addJobs([job]);
     setBkJobs((j) => [id, ...j]);
     try {
-      const r = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
-      track(id, r.statusUrl, r.responseUrl);
+      let still = bkUrl;
+      if (bkPlace && active && !bkHasModel) {
+        const r = await api<{ url: string }>("/api/cast", { action: "place", engine: placeEngine, age: active.summary, sceneUrl: bkUrl, modelUrl: active.url, outfit: "", actionText: bkAction, tweak: "" });
+        still = r.url;
+      }
+      setBkStills((m) => ({ ...m, [id]: still }));
+      patchJob(id, { note: undefined });
+      const body = { engine: eng.id, prompt: `${bkAction.trim() ? "The person is " + bkAction.trim() + ". " : ""}${bkPrompt.trim()} Keep the person's face, hair, outfit and the whole scene consistent with the opening frame.`, refs: refsStill(still), startFromFirst: true, secs: bkSecs, aspect: bkAspect, audio: false, final: false };
+      const r2 = await api<{ statusUrl: string; responseUrl: string }>("/api/video/create", body);
+      track(id, r2.statusUrl, r2.responseUrl);
     } catch (e) {
-      patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed" });
+      patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
     }
   }
 
@@ -747,7 +760,7 @@ export default function CastPage() {
           <div className="w-40">
             <input type="file" accept="image/*,video/*" onChange={(e) => void pickBackup(e.target.files?.[0])} className="w-full text-xs" />
             {rows.some((r) => r.result) && (
-              <select onChange={(e) => { if (e.target.value) { setBkUrl(e.target.value); setBkPreview(e.target.value); } }} className="mt-2 w-full rounded border border-neutral-300 px-1 py-1 text-xs" defaultValue="">
+              <select onChange={(e) => { if (e.target.value) { setBkUrl(e.target.value); setBkPreview(e.target.value); setBkHasModel(true); } }} className="mt-2 w-full rounded border border-neutral-300 px-1 py-1 text-xs" defaultValue="">
                 <option value="">or use a finished still…</option>
                 {rows.filter((r) => r.result).map((r, i) => (
                   <option key={r.id} value={r.result}>{`Scene still ${i + 1}`}</option>
@@ -758,6 +771,11 @@ export default function CastPage() {
             {bkPreview && <img src={bkPreview} alt="Backup still" className="mt-2 w-full rounded" />}
           </div>
           <div className="min-w-0 flex-1 space-y-2">
+            <label className="flex items-center gap-2 text-xs font-medium">
+              <input type="checkbox" checked={bkPlace && !bkHasModel} disabled={bkHasModel || !active} onChange={(e) => setBkPlace(e.target.checked)} />
+              {bkHasModel ? "This still already has the model in it" : active ? `Place ${active.name} into this still first (keeps their exact outfit)` : "Choose a model above to place into the still"}
+            </label>
+            <input value={bkAction} onChange={(e) => setBkAction(e.target.value)} placeholder="What is the model doing? e.g. walking along the shore" className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" />
             <textarea value={bkPrompt} onChange={(e) => setBkPrompt(e.target.value)} rows={2} className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" placeholder="What should move?" />
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <select value={bkEngine} onChange={(e) => setBkEngine(e.target.value)} className="rounded border border-neutral-300 px-2 py-1">
@@ -783,6 +801,8 @@ export default function CastPage() {
               if (!j) return null;
               return (
                 <div key={id} className="rounded-lg border border-neutral-200 p-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {bkStills[id] && j.status !== "done" && <img src={bkStills[id]} alt="Opening frame" className="mb-2 w-full rounded" />}
                   {j.status === "done" && j.videoUrl ? (
                     <>
                       <video src={j.videoUrl} controls loop muted className="w-full rounded bg-black" />
