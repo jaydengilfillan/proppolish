@@ -12,6 +12,8 @@ interface SavedModel {
   url: string;
   engine: CastEngine;
   summary: string;
+  width?: number;
+  height?: number;
 }
 interface SceneRow {
   id: string;
@@ -124,6 +126,11 @@ export default function CastPage() {
   const [rows, setRows] = useState<SceneRow[]>([{ id: "r1", outfit: "", action: "", tweak: "", tweakAll: "", busy: false }]);
   const [placeEngine, setPlaceEngine] = useState<CastEngine>("nano");
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const addRef = useRef<HTMLInputElement | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState("");
+  const [looks, setLooks] = useState<string[]>([]);
+  const [lookResults, setLookResults] = useState<{ look: string; url?: string; busy: boolean; error?: string }[]>([]);
 
   useEffect(() => {
     try {
@@ -184,6 +191,52 @@ export default function CastPage() {
     const m: SavedModel = { id: `${Date.now()}`, name, url, engine, summary: `${spec.age} ${spec.gender}, ${spec.hairColour} hair` };
     persist([m, ...saved]);
     setActiveId(m.id);
+  }
+
+  /** Add a real person (e.g. an agent screenshot) as a model. */
+  async function addModel(file: File | undefined) {
+    if (!file) return;
+    setAddBusy(true);
+    setAddError("");
+    try {
+      const sc = await sceneFromFile(file);
+      const url = await uploadToFal(sc.blob, `model-${Date.now()}.jpg`);
+      const name = window.prompt("Name this model", `Model ${saved.length + 1}`)?.trim() || `Model ${saved.length + 1}`;
+      const m: SavedModel = { id: `${Date.now()}`, name, url, engine: "seedream", summary: "Added photo", width: sc.w, height: sc.h };
+      persist([m, ...saved]);
+      setActiveId(m.id);
+      setLookResults([]);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setAddBusy(false);
+      if (addRef.current) addRef.current.value = "";
+    }
+  }
+
+  /** Generate the active model in each ticked outfit/style (Seedream), keeping the same person. */
+  async function generateLooks() {
+    if (!active || looks.length === 0) return;
+    const list = [...looks];
+    setLookResults(list.map((l) => ({ look: l, busy: true })));
+    await Promise.all(
+      list.map(async (l, i) => {
+        try {
+          const r = await api<{ url: string }>("/api/cast", {
+            action: "editscene",
+            engine: "seedream",
+            age: active.summary,
+            imageUrl: active.url,
+            width: active.width,
+            height: active.height,
+            change: `Change the person's whole outfit to ${l}, fully replacing every garment they are wearing. Keep the same face, hair, body, pose and background`,
+          });
+          setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: false, url: r.url } : x)));
+        } catch (e) {
+          setLookResults((o) => o.map((x, j) => (j === i ? { look: l, busy: false, error: e instanceof Error ? e.message : "Failed" } : x)));
+        }
+      })
+    );
   }
 
   const patchRow = (id: string, p: Partial<SceneRow>) => setRows((r) => r.map((x) => (x.id === id ? { ...x, ...p } : x)));
@@ -253,7 +306,14 @@ export default function CastPage() {
           <h1 className="text-2xl font-semibold tracking-tight">{APP_NAME} · Models</h1>
           <p className="text-sm text-neutral-500">Design a model once, then place the same person into different scenes and outfits. Every model is generated attractive, well groomed and stylishly dressed.</p>
         </div>
-        <Link href="/" className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-800">← Photo tools</Link>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex gap-2">
+            <input ref={addRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => void addModel(e.target.files?.[0])} />
+            <button onClick={() => addRef.current?.click()} disabled={addBusy} className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">{addBusy ? "Adding…" : "+ Add model"}</button>
+            <Link href="/" className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-800">← Photo tools</Link>
+          </div>
+          {addError && <p className="text-xs text-red-600">{addError}</p>}
+        </div>
       </header>
 
       {/* 1. Design */}
@@ -340,6 +400,43 @@ export default function CastPage() {
           </div>
         )}
       </section>
+
+      {/* Looks for the active model */}
+      {active && (
+        <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
+          <h2 className="mb-2 text-sm font-semibold">Outfits and styles for {active.name}</h2>
+          <p className="mb-2 text-xs text-neutral-500">Tick the looks you want, then generate. Keeps the same person and changes the clothing (ByteDance Seedream, about $0.04 each).</p>
+          <div className="flex flex-wrap gap-2">
+            {OUTFIT_CHIPS.concat(["a smart real estate agent outfit", "casual weekend wear", "a red dress", "driving-ready stylish casual wear"]).map((c) => (
+              <label key={c} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${looks.includes(c) ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300"}`}>
+                <input type="checkbox" className="hidden" checked={looks.includes(c)} onChange={() => setLooks((l) => (l.includes(c) ? l.filter((x) => x !== c) : [...l, c]))} />
+                {c}
+              </label>
+            ))}
+          </div>
+          <button onClick={() => void generateLooks()} disabled={looks.length === 0 || lookResults.some((r) => r.busy)} className="mt-3 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40">
+            Generate {looks.length || ""} look{looks.length === 1 ? "" : "s"}
+          </button>
+          {lookResults.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {lookResults.map((r, i) => (
+                <div key={i} className="rounded-lg border border-neutral-200 p-2">
+                  <p className="mb-1 text-[11px] text-neutral-500">{r.look}</p>
+                  {r.busy && <p className="py-16 text-center text-xs text-neutral-500">Generating…</p>}
+                  {r.error && <p className="text-xs text-red-600">{r.error}</p>}
+                  {r.url && (
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={r.url} alt={r.look} className="w-full rounded" />
+                      <button onClick={() => void download(r.url!, `${active.name}-${i + 1}.jpg`)} className="mt-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium">Download</button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 2. Scenes */}
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
