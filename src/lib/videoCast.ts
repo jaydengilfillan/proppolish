@@ -45,10 +45,11 @@ export function designPrompt(spec: ModelSpec, variant: number): string {
 /** Beach-lifestyle campaign look: the swimwear is the whole outfit, nothing layered over it. Slimmer and more glamorous for 20s and 30s. */
 const isYoung = (age?: string) => /\b[23]0s?\b/.test(age ?? "") && !/\b[456]0s?\b/.test(age ?? "");
 export function swimRule(age?: string): string {
+  if (age === "soft") return "The person wears a bikini as their whole outfit, with no other layers over it. Relaxed beach lifestyle photo.";
   const cut = isYoung(age)
-    ? "a small, slim triangle bikini with low-rise, slim-cut bikini bottoms (not high-waisted, not full-coverage, not boy-short), the classic Gold Coast beach bikini look"
-    : "a classic flattering bikini";
-  return `SWIMWEAR LOOK, VERY IMPORTANT: the person wears ${cut} as their ENTIRE outfit, with NOTHING over it. No shirt, blazer, jacket, cover-up, kaftan, sarong, towel or any other layer, no sleeves, no baggy or loose clothing, no high-waisted bottoms. Bare shoulders, arms, midriff and legs, bare feet. Show it as a glamorous, confident, sun-kissed Gold Coast beach lifestyle campaign photo: healthy toned figure, glowing natural tan, relaxed confident posture, aspirational and tasteful, never frumpy or covered up.`;
+    ? "a slim triangle bikini with low-rise bottoms"
+    : "a classic bikini";
+  return `The person wears ${cut} as their whole outfit, with nothing layered over it: no shirt, jacket, cover-up or sarong, no high-waisted bottoms. Confident, relaxed, sun-kissed Gold Coast beach lifestyle photo.`;
 }
 
 export function tweakModelPrompt(change: string, age?: string): string {
