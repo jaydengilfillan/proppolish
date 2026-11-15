@@ -2,11 +2,12 @@
  * Cast: design a consistent model, then place that same person into different scenes and outfits.
  * Image engines: Nano Banana Pro (best identity hold) or Seedream 4.5 (cheaper).
  */
-export type CastEngine = "nano" | "seedream" | "gemini" | "grok" | "xai" | "flux2";
+export type CastEngine = "nano" | "seedream" | "seedream4" | "gemini" | "grok" | "xai" | "flux2";
 
 export const CAST_ENGINES: { id: CastEngine; label: string; blurb: string; cost: number }[] = [
   { id: "nano", label: "Nano Banana Pro", blurb: "Best at keeping the same face", cost: 0.15 },
   { id: "seedream", label: "Seedream 4.5", blurb: "Cheaper, try it side by side", cost: 0.04 },
+  { id: "seedream4", label: "Seedream 4.0", blurb: "Older version, often less strict", cost: 0.03 },
   { id: "flux2", label: "FLUX 2 Pro (same as Lifestyle Shots)", blurb: "Different filter, relaxed setting. Backup when others block", cost: 0.06 },
   { id: "grok", label: "Grok Imagine (xAI)", blurb: "Different filter, backup when others block", cost: 0.03 },
   { id: "xai", label: "Grok direct (xAI, not fal)", blurb: "Runs on xAI's own API with your xAI key", cost: 0.03 },
