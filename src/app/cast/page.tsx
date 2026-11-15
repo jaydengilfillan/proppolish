@@ -99,7 +99,7 @@ async function sceneFromFile(file: File): Promise<{ blob: Blob; w: number; h: nu
 }
 
 const money = (n: number) => `$${n.toFixed(2)}`;
-const OUTFIT_CHIPS = ["a stylish summer dress", "swimwear", "a tailored business suit", "smart casual shirt and chinos", "elegant evening wear", "activewear"];
+const OUTFIT_CHIPS = ["a stylish summer dress", "a classic bikini", "a bikini with a sarong", "a one-piece swimsuit", "a tailored business suit", "smart casual shirt and chinos", "elegant evening wear", "activewear"];
 const STORE_KEY = "cast-models-v1";
 
 function Select({ label, value, options, onChange }: { label: string; value: string; options: readonly string[]; onChange: (v: string) => void }) {
