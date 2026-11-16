@@ -7,6 +7,7 @@ import { triggerDownload, urlToBlob } from "@/lib/image";
 import { CREATE_ENGINES } from "@/lib/videoCreate";
 import { Job, api, useVideoStore } from "@/lib/videoStore";
 import VideoNav from "../VideoNav";
+import { prepareClip } from "@/lib/prepareClip";
 
 const EDIT_ENGINES = [
   { id: "klingpro", label: "Kling Omni Edit (Pro)", cost: "$0.168/s" },
@@ -32,6 +33,7 @@ export default function EditPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [upBusy, setUpBusy] = useState(false);
+  const [upNote, setUpNote] = useState("");
   const upRef = useRef<HTMLInputElement | null>(null);
 
   /** Upload your own clip (any video, not just ones made here) so the edit tools can be used on it. */
@@ -42,8 +44,19 @@ export default function EditPage() {
     try {
       for (const file of Array.from(files)) {
         if (!file.type.startsWith("video/")) throw new Error(`${file.name} is not a video.`);
-        const { uploadUrl, fileUrl } = await api<{ uploadUrl: string; fileUrl: string }>("/api/video/upload-init", { contentType: file.type, fileName: file.name });
-        const put = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+        // Re-encode to a clean H.264 MP4 (max 10s, 720p to 1280) so the edit models never reject the format.
+        setUpNote("Preparing the clip… (about as long as the clip itself, keep this tab open)");
+        let body: Blob = file;
+        let ctype = file.type;
+        try {
+          body = await prepareClip(file, 9.4, (p) => setUpNote(`Preparing the clip… ${Math.round(p * 100)}% (keep this tab open)`));
+          ctype = "video/mp4";
+        } catch {
+          /* fall back to the original file */
+        }
+        setUpNote("Uploading…");
+        const { uploadUrl, fileUrl } = await api<{ uploadUrl: string; fileUrl: string }>("/api/video/upload-init", { contentType: ctype, fileName: file.name.replace(/\.[^.]+$/, "") + ".mp4" });
+        const put = await fetch(uploadUrl, { method: "PUT", body, headers: { "Content-Type": ctype } });
         if (!put.ok) throw new Error(`Upload failed (${put.status})`);
         const id = `${Date.now()}-upload-${Math.random().toString(36).slice(2, 6)}`;
         addJobs([{ id, kind: "edit", engine: "upload", title: file.name.slice(0, 70), status: "done", videoUrl: fileUrl, createdAt: Date.now() }]);
@@ -54,6 +67,7 @@ export default function EditPage() {
       setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUpBusy(false);
+      setUpNote("");
       if (upRef.current) upRef.current.value = "";
     }
   }
@@ -129,10 +143,11 @@ export default function EditPage() {
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">1. Pick a clip or upload your own</h2>
-          <button onClick={() => upRef.current?.click()} disabled={upBusy} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">{upBusy ? "Uploading…" : "+ Upload a video"}</button>
+          <button onClick={() => upRef.current?.click()} disabled={upBusy} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">{upBusy ? "Working…" : "+ Upload a video"}</button>
           <input ref={upRef} type="file" accept="video/*" multiple className="hidden" onChange={(e) => void uploadClip(e.target.files)} />
         </div>
-        <p className="mb-2 text-xs text-neutral-400">Uploaded clips work with every edit tool below, for example Kling Omni to remove a reflection. Best with clips of 3 to 10 seconds.</p>
+        {upNote && <p className="mb-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">{upNote}</p>}
+        <p className="mb-2 text-xs text-neutral-400">Uploaded clips are converted to a clean MP4 (first 10 seconds) and work with every edit tool below, for example Kling Omni to remove a reflection. Best with clips of 3 to 10 seconds.</p>
         {done.length === 0 ? (
           <p className="text-sm text-neutral-500">Upload a video above, or finished clips from Relight, Create and Edit show up here.</p>
         ) : (
