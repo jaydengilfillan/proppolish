@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { APP_NAME } from "@/lib/config";
 import { triggerDownload, urlToBlob } from "@/lib/image";
@@ -14,6 +14,7 @@ const EDIT_ENGINES = [
 ];
 
 const jobLabel = (j: Job) => {
+  if (j.engine === "upload") return "Uploaded clip";
   if (j.kind === "edit" && !j.params) return `Edited · ${EDIT_ENGINES.find((e) => e.id === j.engine.replace("edit-", ""))?.label ?? j.engine}`;
   return CREATE_ENGINES.find((e) => e.id === j.engine)?.label ?? j.engine;
 };
@@ -21,7 +22,7 @@ const jobLabel = (j: Job) => {
 export default function EditPage() {
   const { jobs, addJobs, patchJob, removeJob, clearFinished, track, prefs, addPref, togglePref, removePref, prefsText, history, logPrompt } = useVideoStore();
   const done = useMemo(() => jobs.filter((j) => j.status === "done" && j.videoUrl), [jobs]);
-  const edits = useMemo(() => jobs.filter((j) => j.kind === "edit"), [jobs]);
+  const edits = useMemo(() => jobs.filter((j) => j.kind === "edit" && j.engine !== "upload"), [jobs]);
   const [selId, setSelId] = useState<string | null>(null);
   const [change, setChange] = useState("");
   const [mode, setMode] = useState<"edit" | "rerun">("edit");
@@ -30,6 +31,32 @@ export default function EditPage() {
   const [newPref, setNewPref] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [upBusy, setUpBusy] = useState(false);
+  const upRef = useRef<HTMLInputElement | null>(null);
+
+  /** Upload your own clip (any video, not just ones made here) so the edit tools can be used on it. */
+  async function uploadClip(files: FileList | null) {
+    if (!files?.length) return;
+    setUpBusy(true);
+    setError(null);
+    try {
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("video/")) throw new Error(`${file.name} is not a video.`);
+        const { uploadUrl, fileUrl } = await api<{ uploadUrl: string; fileUrl: string }>("/api/video/upload-init", { contentType: file.type, fileName: file.name });
+        const put = await fetch(uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
+        if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+        const id = `${Date.now()}-upload-${Math.random().toString(36).slice(2, 6)}`;
+        addJobs([{ id, kind: "edit", engine: "upload", title: file.name.slice(0, 70), status: "done", videoUrl: fileUrl, createdAt: Date.now() }]);
+        setSelId(id);
+        setMode("edit");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUpBusy(false);
+      if (upRef.current) upRef.current.value = "";
+    }
+  }
 
   const sel = done.find((j) => j.id === selId) ?? null;
   const canRerun = !!sel?.params;
@@ -100,9 +127,14 @@ export default function EditPage() {
 
       {/* Pick a clip */}
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold">1. Pick a clip</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">1. Pick a clip or upload your own</h2>
+          <button onClick={() => upRef.current?.click()} disabled={upBusy} className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40">{upBusy ? "Uploading…" : "+ Upload a video"}</button>
+          <input ref={upRef} type="file" accept="video/*" multiple className="hidden" onChange={(e) => void uploadClip(e.target.files)} />
+        </div>
+        <p className="mb-2 text-xs text-neutral-400">Uploaded clips work with every edit tool below, for example Kling Omni to remove a reflection. Best with clips of 3 to 10 seconds.</p>
         {done.length === 0 ? (
-          <p className="text-sm text-neutral-500">Finished clips from Relight, Create and Edit show up here. Make one first.</p>
+          <p className="text-sm text-neutral-500">Upload a video above, or finished clips from Relight, Create and Edit show up here.</p>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1">
             {done.map((j) => (
@@ -130,7 +162,7 @@ export default function EditPage() {
           value={change}
           onChange={(e) => setChange(e.target.value)}
           rows={3}
-          placeholder="e.g. Make the car a dark grey SUV and slow the camera down."
+          placeholder="e.g. Remove my reflection from the window, or make the car a dark grey SUV."
           className="w-full rounded-md border border-neutral-300 p-2 text-sm"
         />
         {suggestions.length > 0 && (
