@@ -9,7 +9,7 @@ const MODELS = ["Standard V2", "High Fidelity V2", "Low Resolution V2", "CGI", "
 export async function POST(req: NextRequest) {
   const key = process.env.FAL_KEY;
   if (!key) return NextResponse.json({ error: "FAL_KEY is not set on the server." }, { status: 500 });
-  let b: { imageUrl?: unknown; model?: unknown; factor?: unknown; format?: unknown; face?: unknown; w?: unknown; h?: unknown };
+  let b: { imageUrl?: unknown; model?: unknown; factor?: unknown; format?: unknown; face?: unknown; faithful?: unknown; w?: unknown; h?: unknown };
   try {
     b = await req.json();
   } catch {
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   const resp = await fetch("https://queue.fal.run/fal-ai/topaz/upscale/image", {
     method: "POST",
     headers: { Authorization: `Key ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ image_url: b.imageUrl, model, upscale_factor: factor, output_format: format, face_enhancement: b.face !== false }),
+    body: JSON.stringify({ image_url: b.imageUrl, model, upscale_factor: factor, output_format: format, face_enhancement: b.face !== false, ...(b.faithful === true ? { sharpen: 0, denoise: 0, fix_compression: 0 } : {}) }),
   });
   const text = await resp.text();
   if (!resp.ok) return NextResponse.json({ error: `Upscale refused (${resp.status}): ${text.slice(0, 300)}` }, { status: 502 });
