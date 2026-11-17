@@ -37,42 +37,38 @@ function readMeta(file: File): Promise<Meta> {
 export default function UpscalePage() {
   const { jobs, addJobs, patchJob, track, removeJob } = useVideoStore();
   const mine = useMemo(() => jobs.filter((j) => j.engine.startsWith("upscale")), [jobs]);
-  const [file, setFile] = useState<File | null>(null);
-  const [meta, setMeta] = useState<Meta | null>(null);
+  const [queue, setQueue] = useState<{ file: File; meta: Meta }[]>([]);
+  const [drag, setDrag] = useState(false);
   const [model, setModel] = useState("Proteus");
   const [factor, setFactor] = useState(2);
   const [h264, setH264] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const ref = useRef<HTMLInputElement | null>(null);
 
-  async function pick(f: File | undefined) {
-    if (!f) return;
+  async function pick(files: FileList | File[] | null) {
+    if (!files) return;
     setError("");
-    try {
-      setMeta(await readMeta(f));
-      setFile(f);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not read this video.");
+    for (const f of Array.from(files)) {
+      if (!f.type.startsWith("video/")) {
+        setError(`${f.name} is not a video.`);
+        continue;
+      }
+      try {
+        const meta = await readMeta(f);
+        setQueue((q) => [...q, { file: f, meta }]);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not read this video.");
+      }
     }
   }
 
-  const outShort = meta ? Math.min(meta.w, meta.h) * factor : 0;
-  const rate = outShort <= 720 ? 0.01 : outShort <= 1080 ? 0.02 : 0.08;
-  const cost = meta ? meta.secs * rate : 0;
+  const costOf = (m: Meta) => m.secs * (Math.min(m.w, m.h) * factor <= 720 ? 0.01 : Math.min(m.w, m.h) * factor <= 1080 ? 0.02 : 0.08);
+  const cost = queue.reduce((t, q) => t + costOf(q.meta), 0);
 
-  async function run() {
-    if (!file || !meta) return;
-    setBusy(true);
-    setError("");
+  async function runOne(f: File, m: Meta) {
     const id = `${Date.now()}-upscale-${Math.random().toString(36).slice(2, 6)}`;
-    const title = `${meta.name} · ${factor}x ${model}`;
+    const title = `${m.name} · ${factor}x ${model}`;
     addJobs([{ id, kind: "edit", engine: "upscale-topaz", title, status: "waiting", note: "Uploading the original clip… (large files take a while)", createdAt: Date.now() } as Job]);
-    const m = meta;
-    const f = file;
-    setFile(null);
-    setMeta(null);
-    setBusy(false);
     try {
       const { uploadUrl, fileUrl } = await api<{ uploadUrl: string; fileUrl: string }>("/api/video/upload-init", { contentType: f.type || "video/mp4", fileName: f.name });
       const put = await fetch(uploadUrl, { method: "PUT", body: f, headers: { "Content-Type": f.type || "video/mp4" } });
@@ -83,6 +79,12 @@ export default function UpscalePage() {
     } catch (e) {
       patchJob(id, { status: "failed", error: e instanceof Error ? e.message : "Failed", note: undefined });
     }
+  }
+
+  function run() {
+    const q = queue;
+    setQueue([]);
+    q.forEach(({ file, meta }) => void runOne(file, meta));
   }
 
   return (
@@ -97,18 +99,28 @@ export default function UpscalePage() {
       <VideoNav active="upscale" />
 
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold">1. Your video</h2>
-        {!meta ? (
-          <button onClick={() => ref.current?.click()} className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white">+ Choose a video</button>
-        ) : (
-          <div className="text-sm">
-            <p className="font-medium">{meta.name}</p>
-            <p className="text-xs text-neutral-500">{meta.w}×{meta.h} · {meta.secs.toFixed(0)}s · {(meta.bytes / 1048576).toFixed(0)} MB. Output will be about {meta.w * factor}×{meta.h * factor}.</p>
-            <button onClick={() => ref.current?.click()} className="mt-1 text-xs text-neutral-500 underline">Choose a different video</button>
-          </div>
+        <h2 className="mb-2 text-sm font-semibold">1. Your videos</h2>
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); void pick(e.dataTransfer.files); }}
+          onClick={() => ref.current?.click()}
+          className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 text-center ${drag ? "border-neutral-900 bg-neutral-50" : "border-neutral-300 hover:border-neutral-500"}`}
+        >
+          <p className="text-sm font-medium">Drop videos here, or click to choose</p>
+          <p className="mt-1 text-xs text-neutral-500">Add several at once. Your original files are used, not reduced copies. Works well for 20 to 60 second clips.</p>
+        </div>
+        <input ref={ref} type="file" multiple accept="video/*" className="hidden" onChange={(e) => { void pick(e.target.files); e.target.value = ""; }} />
+        {queue.length > 0 && (
+          <ul className="mt-3 space-y-1 text-sm">
+            {queue.map((q, i) => (
+              <li key={i} className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-3 py-1.5">
+                <span className="min-w-0 truncate">{q.meta.name} <span className="text-xs text-neutral-500">{q.meta.w}×{q.meta.h} · {q.meta.secs.toFixed(0)}s · about {money(costOf(q.meta))}</span></span>
+                <button onClick={() => setQueue((l) => l.filter((_, k) => k !== i))} className="text-neutral-400 hover:text-red-600">×</button>
+              </li>
+            ))}
+          </ul>
         )}
-        <input ref={ref} type="file" accept="video/*" className="hidden" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
-        <p className="mt-2 text-xs text-neutral-400">Your original file is used, not a reduced copy, so quality isn't lost before the upscale. Works well for 20 to 60 second clips.</p>
       </section>
 
       <section className="mb-6 rounded-xl border border-neutral-200 bg-white p-4">
@@ -133,8 +145,8 @@ export default function UpscalePage() {
       </section>
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <button onClick={() => void run()} disabled={!file || busy} className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-40">Upscale video</button>
-        <span className="text-xs text-neutral-500">{meta ? `About ${money(cost)} (from fal's per-second list price).` : "Choose a video first."} It runs in the background, so you can start another straight after.</span>
+        <button onClick={run} disabled={queue.length === 0} className="rounded-md bg-neutral-900 px-5 py-2 text-sm font-medium text-white disabled:opacity-40">{queue.length > 1 ? `Upscale ${queue.length} videos` : "Upscale video"}</button>
+        <span className="text-xs text-neutral-500">{queue.length ? `About ${money(cost)} in total (from fal's per-second list price).` : "Add videos first."} It runs in the background, so you can start another straight after.</span>
       </div>
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
