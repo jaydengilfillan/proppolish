@@ -563,6 +563,12 @@ export default function Home() {
             </button>
           )}
           <a
+            href="/upscale"
+            className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-800"
+          >
+            Upscale
+          </a>
+          <a
             href="/cast"
             className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium text-neutral-500 transition hover:text-neutral-800"
           >
