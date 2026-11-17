@@ -16,6 +16,7 @@ const EDIT_ENGINES = [
 
 const jobLabel = (j: Job) => {
   if (j.engine === "upload") return "Uploaded clip";
+  if (j.engine.startsWith("upscale")) return "Upscaled";
   if (j.kind === "edit" && !j.params) return `Edited · ${EDIT_ENGINES.find((e) => e.id === j.engine.replace("edit-", ""))?.label ?? j.engine}`;
   return CREATE_ENGINES.find((e) => e.id === j.engine)?.label ?? j.engine;
 };
@@ -23,7 +24,7 @@ const jobLabel = (j: Job) => {
 export default function EditPage() {
   const { jobs, addJobs, patchJob, removeJob, clearFinished, track, prefs, addPref, togglePref, removePref, prefsText, history, logPrompt } = useVideoStore();
   const done = useMemo(() => jobs.filter((j) => j.status === "done" && j.videoUrl), [jobs]);
-  const edits = useMemo(() => jobs.filter((j) => j.kind === "edit" && j.engine !== "upload"), [jobs]);
+  const edits = useMemo(() => jobs.filter((j) => j.kind === "edit" && j.engine !== "upload" && !j.engine.startsWith("upscale")), [jobs]);
   const [selId, setSelId] = useState<string | null>(null);
   const [change, setChange] = useState("");
   const [mode, setMode] = useState<"edit" | "rerun">("edit");
