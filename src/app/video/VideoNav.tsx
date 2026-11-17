@@ -7,10 +7,11 @@ const TABS = [
   { id: "relight", href: "/video", label: "Relight" },
   { id: "create", href: "/video/create", label: "Create" },
   { id: "edit", href: "/video/edit", label: "Edit" },
+  { id: "upscale", href: "/video/upscale", label: "Upscale" },
 ] as const;
 
 /** Tab bar shared by the video pages. Shows how many jobs are still running. */
-export default function VideoNav({ active }: { active: "relight" | "create" | "edit" }) {
+export default function VideoNav({ active }: { active: "relight" | "create" | "edit" | "upscale" }) {
   const { jobs } = useVideoStore();
   const running = jobs.filter((j) => j.status === "waiting" || j.status === "queued" || j.status === "running").length;
   return (
